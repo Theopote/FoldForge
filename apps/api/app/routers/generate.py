@@ -1,14 +1,19 @@
 """AI text/image → 3D model generation endpoints."""
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.schemas.generate import AiProviderInfo, GenerateFromTextRequest, GenerateModelResponse
+from app.schemas.generation_job import GenerationJob, GenerationJobResponse, JobStatus, JobType
 from app.schemas.model import ProjectStatus, SourceType, Style
-from app.services.ai.registry import get_model_provider, list_providers
+from app.services.ai.generation_queue import generation_queue
+from app.services.ai.job_store import generation_job_store
+from app.services.ai.registry import get_model_provider, list_providers, should_use_async_queue
 from app.services.project_store import project_store
 from app.utils.file_utils import build_storage_url, generate_project_id
 
@@ -23,16 +28,54 @@ async def get_ai_providers() -> list[AiProviderInfo]:
     return [AiProviderInfo(**item) for item in list_providers()]
 
 
+@router.get("/generation-jobs/{job_id}", response_model=GenerationJobResponse)
+async def get_generation_job(job_id: str) -> GenerationJobResponse:
+    """Poll async generation job status and result URLs."""
+    job = generation_job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Generation job not found.")
+
+    project = project_store.get(job.project_id)
+    source_file_url = project.source_file_url if project else None
+    source_image_url = project.source_image_url if project else None
+
+    return GenerationJobResponse(
+        jobId=job.id,
+        projectId=job.project_id,
+        status=job.status,
+        provider=job.provider,
+        progress=job.progress,
+        message=job.message,
+        error=job.error,
+        async_mode=True,
+        sourceFileUrl=source_file_url if job.status == JobStatus.COMPLETED else None,
+        sourceImageUrl=source_image_url,
+        enhancedPrompt=job.enhanced_prompt,
+    )
+
+
 @router.post("/generate-from-text", response_model=GenerateModelResponse)
-async def generate_from_text(request: GenerateFromTextRequest) -> GenerateModelResponse:
+async def generate_from_text(request: GenerateFromTextRequest):
     """
     Generate a papercraft-friendly 3D model from a text description.
 
-    Uses the configured AI provider (mock offline, Replicate when token set).
+    Production providers (Meshy, TripoSR, Replicate) return 202 + jobId for polling.
+    Mock runs synchronously unless AI_ASYNC_FOR_MOCK=true.
     """
     provider = get_model_provider()
     project_id = generate_project_id()
     output_path = settings.uploads_dir / f"{project_id}.glb"
+    name = request.name or _name_from_prompt(request.prompt)
+
+    if should_use_async_queue(provider):
+        return await _enqueue_text_job(
+            project_id=project_id,
+            name=name,
+            prompt=request.prompt,
+            style=request.style,
+            output_path=output_path,
+            provider_name=provider.name,
+        )
 
     result = await provider.generate_from_text(
         prompt=request.prompt,
@@ -43,7 +86,6 @@ async def generate_from_text(request: GenerateFromTextRequest) -> GenerateModelR
     if not result.model_path.exists():
         raise HTTPException(status_code=500, detail="Model generation failed.")
 
-    name = request.name or _name_from_prompt(request.prompt)
     source_url = build_storage_url(Path("uploads") / output_path.name)
 
     project_store.create(
@@ -65,6 +107,7 @@ async def generate_from_text(request: GenerateFromTextRequest) -> GenerateModelR
         aiProvider=result.provider,
         enhancedPrompt=result.enhanced_prompt,
         status=ProjectStatus.UPLOADED,
+        async_mode=False,
     )
 
 
@@ -74,7 +117,7 @@ async def generate_from_image(
     style: Style = Form(default=Style.LOW_POLY),
     hint: str | None = Form(default=None),
     name: str | None = Form(default=None),
-) -> GenerateModelResponse:
+):
     """
     Generate a 3D model from a reference image (photo, sketch, screenshot).
 
@@ -104,6 +147,21 @@ async def generate_from_image(
         await output.write(content)
 
     provider = get_model_provider()
+    project_name = name or Path(file.filename).stem
+    image_url = build_storage_url(Path("uploads") / image_path.name)
+
+    if should_use_async_queue(provider):
+        return await _enqueue_image_job(
+            project_id=project_id,
+            name=project_name,
+            style=style,
+            hint=hint,
+            image_path=image_path,
+            image_url=image_url,
+            output_path=output_path,
+            provider_name=provider.name,
+        )
+
     result = await provider.generate_from_image(
         image_path=image_path,
         style=style,
@@ -115,8 +173,6 @@ async def generate_from_image(
         raise HTTPException(status_code=500, detail="Model generation failed.")
 
     source_url = build_storage_url(Path("uploads") / output_path.name)
-    image_url = build_storage_url(Path("uploads") / image_path.name)
-    project_name = name or Path(file.filename).stem
 
     project_store.create(
         project_id=project_id,
@@ -139,7 +195,113 @@ async def generate_from_image(
         aiProvider=result.provider,
         enhancedPrompt=result.enhanced_prompt,
         status=ProjectStatus.UPLOADED,
+        async_mode=False,
     )
+
+
+async def _enqueue_text_job(
+    *,
+    project_id: str,
+    name: str,
+    prompt: str,
+    style: Style,
+    output_path: Path,
+    provider_name: str,
+) -> JSONResponse:
+    now = datetime.now(timezone.utc)
+    job_id = generate_project_id()
+
+    project_store.create(
+        project_id=project_id,
+        name=name,
+        source_type=SourceType.TEXT_TO_3D,
+        status=ProjectStatus.PROCESSING,
+        source_prompt=prompt,
+        ai_provider=provider_name,
+    )
+
+    job = GenerationJob(
+        id=job_id,
+        projectId=project_id,
+        jobType=JobType.TEXT_TO_3D,
+        provider=provider_name,
+        prompt=prompt,
+        style=style,
+        output_path=str(output_path),
+        createdAt=now,
+        updatedAt=now,
+    )
+    generation_job_store.create(job)
+    await generation_queue.enqueue(job_id)
+
+    body = GenerateModelResponse(
+        projectId=project_id,
+        sourceType=SourceType.TEXT_TO_3D,
+        sourcePrompt=prompt,
+        aiProvider=provider_name,
+        status=ProjectStatus.PROCESSING,
+        jobId=job_id,
+        async_mode=True,
+        jobStatus=JobStatus.QUEUED,
+        progress=0,
+        message="Queued for generation",
+    )
+    return JSONResponse(status_code=202, content=body.model_dump(by_alias=True))
+
+
+async def _enqueue_image_job(
+    *,
+    project_id: str,
+    name: str,
+    style: Style,
+    hint: str | None,
+    image_path: Path,
+    image_url: str,
+    output_path: Path,
+    provider_name: str,
+) -> JSONResponse:
+    now = datetime.now(timezone.utc)
+    job_id = generate_project_id()
+
+    project_store.create(
+        project_id=project_id,
+        name=name,
+        source_type=SourceType.IMAGE_TO_3D,
+        status=ProjectStatus.PROCESSING,
+        source_image_url=image_url,
+        source_prompt=hint,
+        ai_provider=provider_name,
+    )
+
+    job = GenerationJob(
+        id=job_id,
+        projectId=project_id,
+        jobType=JobType.IMAGE_TO_3D,
+        provider=provider_name,
+        style=style,
+        hint=hint,
+        image_path=str(image_path),
+        output_path=str(output_path),
+        createdAt=now,
+        updatedAt=now,
+    )
+    generation_job_store.create(job)
+    await generation_queue.enqueue(job_id)
+
+    body = GenerateModelResponse(
+        projectId=project_id,
+        sourceType=SourceType.IMAGE_TO_3D,
+        sourceImageUrl=image_url,
+        sourcePrompt=hint,
+        aiProvider=provider_name,
+        status=ProjectStatus.PROCESSING,
+        jobId=job_id,
+        async_mode=True,
+        jobStatus=JobStatus.QUEUED,
+        progress=0,
+        message="Queued for generation",
+    )
+    return JSONResponse(status_code=202, content=body.model_dump(by_alias=True))
 
 
 def _name_from_prompt(prompt: str) -> str:

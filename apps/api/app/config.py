@@ -30,11 +30,18 @@ class Settings(BaseSettings):
     allowed_extensions: set[str] = {".obj", ".stl", ".glb", ".gltf", ".fbx"}
     allowed_image_extensions: set[str] = {".jpg", ".jpeg", ".png", ".webp"}
 
-    # AI generation (Phase 2)
-    ai_provider: str = "mock"  # mock | replicate
+    # AI generation (Phase 2+)
+    ai_provider: str = "auto"  # auto | mock | meshy | triposr | replicate
+    ai_async_for_mock: bool = False
     replicate_api_token: str | None = None
-    replicate_text_model: str = ""  # Replicate model version hash
-    replicate_image_model: str = ""  # e.g. TripoSR version id
+    replicate_text_model: str = ""
+    replicate_image_model: str = ""
+    # TripoSR via Replicate (image-to-3D). Example: camenduru/tripo-sr version hash
+    triposr_replicate_version: str = ""
+    # Meshy API — https://docs.meshy.ai
+    meshy_api_key: str | None = None
+    meshy_poll_interval_sec: float = 3.0
+    meshy_poll_timeout_sec: float = 600.0
 
 
 settings = Settings()

@@ -1,16 +1,29 @@
 """FoldForge FastAPI application entry point."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routers import export, generate, health, process, upload
+from app.services.ai.generation_queue import generation_queue
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background workers on startup."""
+    await generation_queue.start()
+    yield
+    await generation_queue.stop()
+
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="AI-powered papercraft generation API for FoldForge / 纸模工坊",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

@@ -1,6 +1,7 @@
 """Abstract interface for AI 3D model generation providers."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +29,8 @@ class ModelGeneratorProvider(ABC):
         prompt: str,
         style: Style,
         output_path: Path,
+        *,
+        on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         """Generate a 3D model file from a text prompt."""
 
@@ -38,6 +41,8 @@ class ModelGeneratorProvider(ABC):
         style: Style,
         output_path: Path,
         hint: str | None = None,
+        *,
+        on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         """Generate a 3D model file from a reference image."""
 
@@ -45,3 +50,8 @@ class ModelGeneratorProvider(ABC):
     def is_available(self) -> bool:
         """Whether this provider can accept requests right now."""
         return True
+
+    @property
+    def requires_async(self) -> bool:
+        """Production providers run in the background job queue."""
+        return False

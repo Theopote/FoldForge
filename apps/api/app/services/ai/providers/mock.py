@@ -1,5 +1,6 @@
 """Offline mock provider — procedural text + heightmap image generation."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from app.schemas.model import Style
@@ -24,6 +25,8 @@ class MockModelProvider(ModelGeneratorProvider):
         prompt: str,
         style: Style,
         output_path: Path,
+        *,
+        on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         enhanced = enhance_text_prompt(prompt, style)
         mesh = generate_procedural_mesh(enhanced, style)
@@ -36,6 +39,8 @@ class MockModelProvider(ModelGeneratorProvider):
         style: Style,
         output_path: Path,
         hint: str | None = None,
+        *,
+        on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         enhanced = enhance_image_hint(hint, style)
         mesh = image_to_relief_mesh(image_path, style)

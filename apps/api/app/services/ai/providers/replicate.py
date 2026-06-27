@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -32,11 +33,17 @@ class ReplicateModelProvider(ModelGeneratorProvider):
     def is_available(self) -> bool:
         return bool(settings.replicate_api_token)
 
+    @property
+    def requires_async(self) -> bool:
+        return True
+
     async def generate_from_text(
         self,
         prompt: str,
         style: Style,
         output_path: Path,
+        *,
+        on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         enhanced = enhance_text_prompt(prompt, style)
         if not self.is_available:
@@ -63,6 +70,8 @@ class ReplicateModelProvider(ModelGeneratorProvider):
         style: Style,
         output_path: Path,
         hint: str | None = None,
+        *,
+        on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         enhanced = enhance_image_hint(hint, style)
         if not self.is_available:

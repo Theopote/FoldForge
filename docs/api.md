@@ -44,6 +44,28 @@ Content-Type: application/json
 
 Request body matches `ProjectSettings` + `projectId`. Full pipeline implemented in Step 5.
 
+## AI Generate (Phase 2)
+
+```http
+POST /api/generate-from-text
+Content-Type: application/json
+
+{ "prompt": "A low poly cat", "style": "low_poly" }
+```
+
+```http
+POST /api/generate-from-image
+Content-Type: multipart/form-data
+```
+
+Fields: `file`, `style`, optional `hint`, `name`.
+
+```http
+GET /api/ai/providers
+```
+
+See [ai.md](./ai.md) for provider configuration.
+
 ## Get Project
 
 ```http
