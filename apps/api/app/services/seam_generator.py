@@ -88,46 +88,63 @@ def _seam_preference_score(
     return magnitude + hidden_bonus
 
 
-def _subpatch_sizes(
+def _build_face_adjacency(
     mesh: trimesh.Trimesh,
-    patch: list[int],
-    cut_edge: tuple[int, int],
-) -> tuple[int, int]:
-    """Return face counts on each side of cut_edge within patch."""
-    patch_set = set(patch)
-    parent = {face: face for face in patch}
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[x]
-            x = parent[x]
-        return x
-
-    def union(a: int, b: int) -> None:
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[rb] = ra
+) -> tuple[dict[int, list[tuple[int, tuple[int, int]]]], list[tuple[int, int, tuple[int, int]]]]:
+    """Face adjacency with edge keys, plus flat interior edge list."""
+    adjacency: dict[int, list[tuple[int, tuple[int, int]]]] = {
+        i: [] for i in range(len(mesh.faces))
+    }
+    interior_edges: list[tuple[int, int, tuple[int, int]]] = []
 
     for face_pair, edge_verts in zip(mesh.face_adjacency, mesh.face_adjacency_edges):
         f1, f2 = int(face_pair[0]), int(face_pair[1])
-        if f1 not in patch_set or f2 not in patch_set:
-            continue
         key = _edge_key(int(edge_verts[0]), int(edge_verts[1]))
-        if key == cut_edge:
+        adjacency[f1].append((f2, key))
+        adjacency[f2].append((f1, key))
+        interior_edges.append((f1, f2, key))
+
+    return adjacency, interior_edges
+
+
+def _subpatch_sizes(
+    adjacency: dict[int, list[tuple[int, tuple[int, int]]]],
+    patch_set: set[int],
+    cut_edge: tuple[int, int],
+) -> tuple[int, int]:
+    """Return face counts on each side of cut_edge within patch (BFS)."""
+    if not patch_set:
+        return 0, 0
+
+    seed_a: int | None = None
+    seed_b: int | None = None
+    for face, neighbors in adjacency.items():
+        if face not in patch_set:
             continue
-        union(f1, f2)
+        for neighbor, key in neighbors:
+            if neighbor in patch_set and key == cut_edge:
+                seed_a, seed_b = face, neighbor
+                break
+        if seed_a is not None:
+            break
 
-    roots: dict[int, int] = {}
-    for face in patch:
-        root = find(face)
-        roots[root] = roots.get(root, 0) + 1
+    if seed_a is None or seed_b is None:
+        return len(patch_set), 0
 
-    sizes = sorted(roots.values(), reverse=True)
-    if len(sizes) >= 2:
-        return sizes[0], sizes[1]
-    if len(sizes) == 1:
-        return sizes[0], 0
-    return 0, 0
+    def bfs_count(start: int) -> int:
+        visited = {start}
+        queue = [start]
+        while queue:
+            current = queue.pop()
+            for neighbor, key in adjacency.get(current, []):
+                if neighbor not in patch_set or neighbor in visited or key == cut_edge:
+                    continue
+                visited.add(neighbor)
+                queue.append(neighbor)
+        return len(visited)
+
+    count_a = bfs_count(seed_a)
+    return count_a, len(patch_set) - count_a
 
 
 def _split_balance_score(patch_size: int, side_a: int, side_b: int) -> float:
@@ -151,6 +168,8 @@ def select_seams(
     threshold = SEAM_ANGLE_THRESHOLD[difficulty]
     max_faces = MAX_FACES_PER_PATCH[difficulty]
 
+    adjacency, interior_edges = _build_face_adjacency(mesh)
+
     # Auto-seam at sharp creases; slightly lower threshold for concave edges
     seams: set[tuple[int, int]] = set()
     for edge, magnitude in data.unsigned.items():
@@ -172,17 +191,14 @@ def select_seams(
             best_edge: tuple[int, int] | None = None
             best_score = -1.0
 
-            for face_pair, edge_verts in zip(mesh.face_adjacency, mesh.face_adjacency_edges):
-                f1, f2 = int(face_pair[0]), int(face_pair[1])
+            for f1, f2, key in interior_edges:
                 if f1 not in patch_set or f2 not in patch_set:
                     continue
-
-                key = _edge_key(int(edge_verts[0]), int(edge_verts[1]))
                 if key in seams:
                     continue
 
                 preference = _seam_preference_score(key, data)
-                side_a, side_b = _subpatch_sizes(mesh, patch, key)
+                side_a, side_b = _subpatch_sizes(adjacency, patch_set, key)
                 balance = _split_balance_score(len(patch), side_a, side_b)
                 score = preference + balance * SPLIT_BALANCE_WEIGHT
 

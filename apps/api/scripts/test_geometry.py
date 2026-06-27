@@ -21,7 +21,7 @@ def _box_mesh() -> trimesh.Trimesh:
 
 
 def _icosahedron() -> trimesh.Trimesh:
-    return trimesh.creation.icosphere(subdivisions=2, radius=25)
+    return trimesh.creation.icosphere(subdivisions=1, radius=25)
 
 
 def test_signed_dihedral_box() -> None:
