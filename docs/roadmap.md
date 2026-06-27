@@ -8,7 +8,7 @@
 - [x] Three.js 3D preview
 - [x] Mesh pipeline (clean, simplify, unfold)
 - [x] SVG / PDF export
-- [ ] Craftability score
+- [x] Craftability score (basic)
 - [ ] ZIP download
 
 ## Phase 2 — AI Input

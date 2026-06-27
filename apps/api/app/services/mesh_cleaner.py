@@ -11,8 +11,8 @@ def clean_mesh(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     """
     cleaned = mesh.copy()
     cleaned.merge_vertices()
-    cleaned.remove_duplicate_faces()
-    cleaned.remove_degenerate_faces()
+    cleaned.update_faces(cleaned.nondegenerate_faces())
+    cleaned.update_faces(cleaned.unique_faces())
     cleaned.remove_unreferenced_vertices()
     cleaned.fix_normals()
 
@@ -32,9 +32,14 @@ def mesh_quality_issues(mesh: trimesh.Trimesh) -> list[str]:
     if not mesh.is_winding_consistent:
         warnings.append("Inconsistent face winding detected.")
 
-    edges = mesh.edges_unique
-    edge_faces = mesh.edges_unique_faces
-    non_manifold = sum(1 for faces in edge_faces if len(faces) > 2)
+    edge_counts: dict[tuple[int, int], int] = {}
+    for face in mesh.faces:
+        for i in range(3):
+            v0, v1 = int(face[i]), int(face[(i + 1) % 3])
+            key = (v0, v1) if v0 < v1 else (v1, v0)
+            edge_counts[key] = edge_counts.get(key, 0) + 1
+
+    non_manifold = sum(1 for count in edge_counts.values() if count > 2)
     if non_manifold > 0:
         warnings.append(f"Found {non_manifold} non-manifold edges.")
 

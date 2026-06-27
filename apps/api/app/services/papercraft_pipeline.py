@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from app.config import settings
+from app.config import settings as app_settings
 from app.models.geometry import PipelineResult
 from app.schemas.model import ProjectSettings
 from app.services.craftability_scorer import compute_craftability
@@ -47,11 +47,11 @@ def run_pipeline(
 
     pages = layout_pieces(pieces, settings.paper_size)
 
-    processed_path = settings.processed_dir / f"{project_id}.glb"
+    processed_path = app_settings.processed_dir / f"{project_id}.glb"
     mesh.export(processed_path)
 
-    svg_path = settings.exports_dir / f"{project_id}.svg"
-    pdf_path = settings.exports_dir / f"{project_id}.pdf"
+    svg_path = app_settings.exports_dir / f"{project_id}.svg"
+    pdf_path = app_settings.exports_dir / f"{project_id}.pdf"
 
     export_svg(pages, svg_path, project_name, settings)
     export_pdf(pages, pdf_path, project_name, settings)
