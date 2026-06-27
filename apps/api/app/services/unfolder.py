@@ -1,4 +1,4 @@
-"""Approximate 2D unfolding of mesh patches."""
+"""2D unfolding of mesh patches — LSCM/ABF with BFS fallback."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 from app.models.geometry import CutLine, FoldLine, Point2D, Tab, UnfoldPiece
+from app.services.parametrization import abf_refine_uv, lscm_parameterize
 from app.services.seam_generator import EdgeDihedralData, _edge_key, compute_edge_dihedral_angles
 
 OVERLAP_AREA_THRESHOLD_MM2 = 0.5
@@ -87,40 +88,31 @@ def _rotate_point_to_edge(
 def _build_face_adjacency(
     mesh: trimesh.Trimesh,
 ) -> dict[int, list[tuple[int, int, int]]]:
-    """Map face index → list of (neighbor_face, v0, v1) shared-edge vertices."""
     adjacency: dict[int, list[tuple[int, int, int]]] = {i: [] for i in range(len(mesh.faces))}
-
     for face_pair, edge_verts in zip(mesh.face_adjacency, mesh.face_adjacency_edges):
         f1, f2 = int(face_pair[0]), int(face_pair[1])
         v0, v1 = int(edge_verts[0]), int(edge_verts[1])
         adjacency[f1].append((f2, v0, v1))
         adjacency[f2].append((f1, v0, v1))
-
     return adjacency
 
 
 def _extract_outline_coords(merged) -> list[tuple[float, float]]:
-    """Extract the best outer boundary from a Shapely union result."""
     if merged.is_empty:
         return []
-
     if merged.geom_type == "Polygon":
         return list(merged.exterior.coords)
-
     if merged.geom_type == "MultiPolygon":
         largest = max(merged.geoms, key=lambda geom: geom.area)
         return list(largest.exterior.coords)
-
     if merged.geom_type == "GeometryCollection":
         polygons = [geom for geom in merged.geoms if geom.geom_type == "Polygon" and not geom.is_empty]
         if polygons:
             largest = max(polygons, key=lambda geom: geom.area)
             return list(largest.exterior.coords)
-
     cleaned = merged.buffer(0)
     if not cleaned.is_empty and cleaned.geom_type in ("Polygon", "MultiPolygon"):
         return _extract_outline_coords(cleaned)
-
     return list(merged.convex_hull.exterior.coords)
 
 
@@ -152,22 +144,49 @@ def _detect_face_overlap(new_face: Polygon, placed: list[Polygon]) -> bool:
     return False
 
 
-def unfold_patch(
+def _vertex_map_has_overlap(
     mesh: trimesh.Trimesh,
     face_indices: list[int],
-    piece_label: str,
+    vertex_2d: dict[int, Point2D],
+) -> bool:
+    placed: list[Polygon] = []
+    for face_idx in face_indices:
+        poly = _face_polygon_2d(mesh, face_idx, vertex_2d)
+        if poly is None:
+            continue
+        if _detect_face_overlap(poly, placed):
+            return True
+        placed.append(poly)
+    return False
+
+
+def _patch_vertices(mesh: trimesh.Trimesh, face_indices: list[int]) -> list[int]:
+    verts: set[int] = set()
+    for face_idx in face_indices:
+        for v in mesh.faces[face_idx]:
+            verts.add(int(v))
+    return sorted(verts)
+
+
+def _unfold_patch_lscm(
+    mesh: trimesh.Trimesh,
+    face_indices: list[int],
+) -> dict[int, Point2D] | None:
+    """LSCM + ABF-lite parameterization for a patch."""
+    vertices = mesh.vertices
+    patch_vertices = _patch_vertices(mesh, face_indices)
+    uv = lscm_parameterize(vertices, mesh.faces, patch_vertices)
+    if uv is None:
+        return None
+    return abf_refine_uv(vertices, mesh.faces, patch_vertices, uv)
+
+
+def _unfold_patch_bfs(
+    mesh: trimesh.Trimesh,
+    face_indices: list[int],
     dihedral: EdgeDihedralData,
-) -> UnfoldPiece:
-    """
-    Unfold a connected face patch into 2D using incremental face placement.
-
-    Neighbors are placed in order of lowest dihedral (flattest joints first) to
-    reduce cumulative folding error. Interior edges become fold lines; boundary
-    edges become cut lines.
-    """
-    if not face_indices:
-        raise ValueError("Patch has no faces.")
-
+) -> tuple[dict[int, Point2D], bool]:
+    """Incremental BFS unfold — fallback when LSCM overlaps or fails."""
     patch_set = set(face_indices)
     vertex_2d: dict[int, Point2D] = {}
     placed_faces: set[int] = set()
@@ -176,13 +195,9 @@ def unfold_patch(
 
     root = face_indices[0]
     origin, axis_u, axis_w = _face_local_basis(mesh, root)
-
     for vertex_idx in mesh.faces[root]:
         vertex_2d[int(vertex_idx)] = _project_to_plane(
-            mesh.vertices[int(vertex_idx)],
-            origin,
-            axis_u,
-            axis_w,
+            mesh.vertices[int(vertex_idx)], origin, axis_u, axis_w
         )
     placed_faces.add(root)
     root_poly = _face_polygon_2d(mesh, root, vertex_2d)
@@ -191,7 +206,6 @@ def unfold_patch(
 
     adjacency = _build_face_adjacency(mesh)
     heap: list[tuple[float, int, int, int, int]] = []
-    # (dihedral priority, current face, neighbor, v0, v1)
 
     def push_neighbors(current: int) -> None:
         for neighbor, v0, v1 in adjacency.get(current, []):
@@ -204,10 +218,9 @@ def unfold_patch(
     push_neighbors(root)
 
     while heap:
-        _, current, neighbor, v0, v1 = heapq.heappop(heap)
+        _, _current, neighbor, v0, v1 = heapq.heappop(heap)
         if neighbor in placed_faces:
             continue
-
         edge_a, edge_b = v0, v1
         if edge_a not in vertex_2d or edge_b not in vertex_2d:
             continue
@@ -227,7 +240,6 @@ def unfold_patch(
 
         trial_poly = _face_polygon_2d(mesh, neighbor, trial_2d)
         if trial_poly is not None and _detect_face_overlap(trial_poly, placed_triangles):
-            # Retry with flipped edge orientation (mirror across shared edge)
             flipped = dict(vertex_2d)
             for vertex_idx in mesh.faces[neighbor]:
                 vi = int(vertex_idx)
@@ -253,7 +265,19 @@ def unfold_patch(
             placed_triangles.append(trial_poly)
         push_neighbors(neighbor)
 
-    # Build piece outline from union of face triangles
+    return vertex_2d, overlap_detected
+
+
+def _build_piece_from_vertices(
+    mesh: trimesh.Trimesh,
+    face_indices: list[int],
+    piece_label: str,
+    vertex_2d: dict[int, Point2D],
+    dihedral: EdgeDihedralData,
+    *,
+    has_overlap: bool,
+) -> UnfoldPiece:
+    patch_set = set(face_indices)
     triangles: list[Polygon] = []
     for face_idx in face_indices:
         poly = _face_polygon_2d(mesh, face_idx, vertex_2d)
@@ -267,14 +291,12 @@ def unfold_patch(
         outline = [p.as_tuple() for p in vertex_2d.values()]
 
     polygon = [Point2D(x=float(x), y=float(y)) for x, y in outline]
-
     fold_lines: list[FoldLine] = []
     cut_lines: list[CutLine] = []
 
     for (f1, f2), (v0, v1) in zip(mesh.face_adjacency, mesh.face_adjacency_edges):
         if f1 not in patch_set and f2 not in patch_set:
             continue
-
         key = _edge_key(v0, v1)
         if v0 not in vertex_2d or v1 not in vertex_2d:
             continue
@@ -299,6 +321,7 @@ def unfold_patch(
                     id=f"cut-{piece_label}-{len(cut_lines)}",
                     start=start,
                     end=end,
+                    mesh_edge=key,
                 )
             )
 
@@ -309,7 +332,39 @@ def unfold_patch(
         fold_lines=fold_lines,
         cut_lines=cut_lines,
         label=piece_label,
-        has_overlap=overlap_detected,
+        has_overlap=has_overlap,
+    )
+
+
+def unfold_patch(
+    mesh: trimesh.Trimesh,
+    face_indices: list[int],
+    piece_label: str,
+    dihedral: EdgeDihedralData,
+) -> UnfoldPiece:
+    """
+    Unfold a patch using LSCM/ABF; fall back to incremental BFS on overlap/failure.
+    """
+    if not face_indices:
+        raise ValueError("Patch has no faces.")
+
+    vertex_2d = _unfold_patch_lscm(mesh, face_indices)
+    has_overlap = False
+
+    if vertex_2d is not None:
+        has_overlap = _vertex_map_has_overlap(mesh, face_indices, vertex_2d)
+
+    if vertex_2d is None or has_overlap:
+        vertex_2d, bfs_overlap = _unfold_patch_bfs(mesh, face_indices, dihedral)
+        has_overlap = bfs_overlap or _vertex_map_has_overlap(mesh, face_indices, vertex_2d)
+
+    return _build_piece_from_vertices(
+        mesh,
+        face_indices,
+        piece_label,
+        vertex_2d,
+        dihedral,
+        has_overlap=has_overlap,
     )
 
 
@@ -320,17 +375,13 @@ def unfold_mesh(
 ) -> list[UnfoldPiece]:
     """Unfold all patches into 2D pieces with labels A, B, C, ..."""
     data = dihedral or compute_edge_dihedral_angles(mesh)
-
-    pieces: list[UnfoldPiece] = []
-    for index, patch in enumerate(patches):
-        label = _piece_label(index)
-        pieces.append(unfold_patch(mesh, patch, label, data))
-
-    return pieces
+    return [
+        unfold_patch(mesh, patch, _piece_label(index), data)
+        for index, patch in enumerate(patches)
+    ]
 
 
 def detect_unfold_overlaps(pieces: list[UnfoldPiece]) -> list[str]:
-    """Return warnings for pieces whose 2D unfold faces overlap."""
     warnings: list[str] = []
     for piece in pieces:
         if piece.has_overlap:
@@ -342,7 +393,6 @@ def detect_unfold_overlaps(pieces: list[UnfoldPiece]) -> list[str]:
 
 
 def _piece_label(index: int) -> str:
-    """Generate piece labels: A, B, ... Z, AA, AB, ..."""
     label = ""
     n = index
     while True:
@@ -354,27 +404,63 @@ def _piece_label(index: int) -> str:
     return label
 
 
+def piece_to_shapely(
+    piece: UnfoldPiece,
+    *,
+    include_tabs: bool = True,
+    gap_buffer: float = 0.0,
+) -> Polygon:
+    """Build a Shapely polygon for layout collision tests."""
+    polys: list[Polygon] = []
+    if len(piece.polygon) >= 3:
+        try:
+            body = Polygon([p.as_tuple() for p in piece.polygon])
+            if body.is_valid and not body.is_empty:
+                polys.append(body)
+        except Exception:
+            pass
+
+    if include_tabs:
+        for tab in piece.tabs:
+            if len(tab.polygon) < 3:
+                continue
+            try:
+                tab_poly = Polygon([p.as_tuple() for p in tab.polygon])
+                if tab_poly.is_valid and not tab_poly.is_empty:
+                    polys.append(tab_poly)
+            except Exception:
+                continue
+
+    if not polys:
+        return Polygon()
+
+    merged = unary_union(polys)
+    if gap_buffer > 0:
+        merged = merged.buffer(gap_buffer)
+    if merged.geom_type == "Polygon":
+        return merged
+    if merged.geom_type == "MultiPolygon":
+        return max(merged.geoms, key=lambda geom: geom.area)
+    return merged.convex_hull
+
+
 def piece_bounds(
     piece: UnfoldPiece,
     *,
     include_tabs: bool = False,
 ) -> tuple[float, float, float, float]:
-    """Return min_x, min_y, max_x, max_y for a piece (optionally including tabs)."""
     points = list(piece.polygon)
     if include_tabs:
         for tab in piece.tabs:
             points.extend(tab.polygon)
-
     if not points:
         return 0.0, 0.0, 0.0, 0.0
-
     xs = [p.x for p in points]
     ys = [p.y for p in points]
     return min(xs), min(ys), max(xs), max(ys)
 
 
 def piece_polygon_area(piece: UnfoldPiece) -> float:
-    """Shoelace area of the piece outline in mm²."""
     if len(piece.polygon) < 3:
         return 0.0
     try:
@@ -385,7 +471,6 @@ def piece_polygon_area(piece: UnfoldPiece) -> float:
 
 
 def translate_piece(piece: UnfoldPiece, dx: float, dy: float) -> UnfoldPiece:
-    """Return a copy of piece with all coordinates translated."""
     return UnfoldPiece(
         id=piece.id,
         face_ids=piece.face_ids,
@@ -416,16 +501,22 @@ def translate_piece(piece: UnfoldPiece, dx: float, dy: float) -> UnfoldPiece:
                 id=line.id,
                 start=Point2D(line.start.x + dx, line.start.y + dy),
                 end=Point2D(line.end.x + dx, line.end.y + dy),
+                mesh_edge=line.mesh_edge,
             )
             for line in piece.cut_lines
         ],
     )
 
 
-def rotate_piece_90(piece: UnfoldPiece) -> UnfoldPiece:
-    """Rotate piece 90° counter-clockwise around origin."""
+def rotate_piece(piece: UnfoldPiece, quarter_turns: int) -> UnfoldPiece:
+    """Rotate piece counter-clockwise in 90° steps."""
+    turns = quarter_turns % 4
+
     def rot(p: Point2D) -> Point2D:
-        return Point2D(p.y, -p.x)
+        x, y = p.x, p.y
+        for _ in range(turns):
+            x, y = y, -x
+        return Point2D(x, y)
 
     return UnfoldPiece(
         id=piece.id,
@@ -457,7 +548,12 @@ def rotate_piece_90(piece: UnfoldPiece) -> UnfoldPiece:
                 id=line.id,
                 start=rot(line.start),
                 end=rot(line.end),
+                mesh_edge=line.mesh_edge,
             )
             for line in piece.cut_lines
         ],
     )
+
+
+def rotate_piece_90(piece: UnfoldPiece) -> UnfoldPiece:
+    return rotate_piece(piece, 1)

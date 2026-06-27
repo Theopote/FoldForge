@@ -1,11 +1,17 @@
-"""Layout unfolded pieces onto printable paper pages."""
+"""Layout unfolded pieces with Shapely collision-aware 2D nesting."""
+
+from __future__ import annotations
+
+from shapely.geometry import Polygon, box
+from shapely.strtree import STRtree
 
 from app.models.geometry import LayoutPage, PlacedPiece, UnfoldPiece
 from app.schemas.model import PaperSize
 from app.services.unfolder import (
     piece_bounds,
     piece_polygon_area,
-    rotate_piece_90,
+    piece_to_shapely,
+    rotate_piece,
     translate_piece,
 )
 
@@ -17,6 +23,8 @@ PAPER_SIZES_MM: dict[PaperSize, tuple[float, float]] = {
 
 MARGIN_MM = 10.0
 GAP_MM = 8.0
+COLLISION_EPS_MM2 = 0.25
+PLACEMENT_STEP_MM = 4.0
 
 
 def layout_pieces(
@@ -24,14 +32,14 @@ def layout_pieces(
     paper_size: PaperSize,
 ) -> list[LayoutPage]:
     """
-    Pack pieces onto pages using shelf rows with 0°/90° rotation.
+    Pack pieces using bottom-left nesting with Shapely collision detection.
 
-    Uses tab-inclusive bounds and prefers adding pages over downscaling to
-    preserve 1:1 mm scale from target height.
+    Tries 0°/90°/180°/270° rotations and prefers adding pages over scaling.
     """
     page_width, page_height = PAPER_SIZES_MM[paper_size]
     usable_w = page_width - 2 * MARGIN_MM
     usable_h = page_height - 2 * MARGIN_MM
+    usable_box = box(MARGIN_MM, MARGIN_MM, MARGIN_MM + usable_w, MARGIN_MM + usable_h)
 
     sorted_pieces = sorted(
         pieces,
@@ -39,66 +47,163 @@ def layout_pieces(
         reverse=True,
     )
 
-    pages: list[LayoutPage] = []
-    current_page = LayoutPage(index=0, width_mm=page_width, height_mm=page_height, placed_pieces=[])
-    cursor_x = MARGIN_MM
-    cursor_y = MARGIN_MM
-    row_height = 0.0
+    pages: list[LayoutPage] = [
+        LayoutPage(index=0, width_mm=page_width, height_mm=page_height, placed_pieces=[]),
+    ]
 
     for piece in sorted_pieces:
-        normalized, width, height, scaled = _best_orientation(piece, usable_w, usable_h)
+        _place_piece_nesting(piece, pages, usable_box, usable_w, usable_h, page_width, page_height)
 
-        if cursor_x + width > MARGIN_MM + usable_w:
-            cursor_x = MARGIN_MM
-            cursor_y += row_height + GAP_MM
-            row_height = 0.0
-
-        if cursor_y + height > MARGIN_MM + usable_h:
-            pages.append(current_page)
-            current_page = LayoutPage(
-                index=len(pages),
-                width_mm=page_width,
-                height_mm=page_height,
-                placed_pieces=[],
-            )
-            cursor_x = MARGIN_MM
-            cursor_y = MARGIN_MM
-            row_height = 0.0
-
-            # Fresh page — retry without row constraints
-            normalized, width, height, scaled = _best_orientation(piece, usable_w, usable_h)
-
-            if height > usable_h or width > usable_w:
-                normalized, width, height, scaled = _best_orientation(
-                    piece,
-                    usable_w,
-                    usable_h,
-                    allow_scale=True,
-                )
-
-        placed = translate_piece(normalized, cursor_x, cursor_y)
-        current_page.placed_pieces.append(
-            PlacedPiece(
-                piece=placed,
-                offset_x=cursor_x,
-                offset_y=cursor_y,
-                page_index=current_page.index,
-            ),
-        )
-
-        cursor_x += width + GAP_MM
-        row_height = max(row_height, height)
-
-        if scaled:
-            current_page.placed_pieces[-1].piece.id = f"{piece.id}-scaled"
-
-    if current_page.placed_pieces or not pages:
-        pages.append(current_page)
+    pages = [page for page in pages if page.placed_pieces]
 
     for index, page in enumerate(pages):
         page.index = index
 
     return pages
+
+
+def _place_piece_nesting(
+    piece: UnfoldPiece,
+    pages: list[LayoutPage],
+    usable_box: Polygon,
+    usable_w: float,
+    usable_h: float,
+    page_width: float,
+    page_height: float,
+) -> None:
+    for page in pages:
+        placement = _find_placement_on_page(piece, page, usable_box, usable_w, usable_h)
+        if placement is not None:
+            normalized, _rotation, x, y = placement
+            placed_piece = translate_piece(normalized, x, y)
+            page.placed_pieces.append(
+                PlacedPiece(piece=placed_piece, offset_x=x, offset_y=y, page_index=page.index),
+            )
+            return
+
+    new_page = LayoutPage(
+        index=len(pages),
+        width_mm=page_width,
+        height_mm=page_height,
+        placed_pieces=[],
+    )
+    pages.append(new_page)
+    placement = _find_placement_on_page(piece, new_page, usable_box, usable_w, usable_h)
+    if placement is not None:
+        normalized, _rotation, x, y = placement
+        placed_piece = translate_piece(normalized, x, y)
+        new_page.placed_pieces.append(
+            PlacedPiece(piece=placed_piece, offset_x=x, offset_y=y, page_index=new_page.index),
+        )
+        return
+
+    scaled = _scale_piece_to_fit(piece, usable_w, usable_h)
+    new_page.placed_pieces.append(
+        PlacedPiece(
+            piece=translate_piece(scaled, MARGIN_MM, MARGIN_MM),
+            offset_x=MARGIN_MM,
+            offset_y=MARGIN_MM,
+            page_index=new_page.index,
+        ),
+    )
+
+
+def _find_placement_on_page(
+    piece: UnfoldPiece,
+    page: LayoutPage,
+    usable_box: Polygon,
+    usable_w: float,
+    usable_h: float,
+) -> tuple[UnfoldPiece, int, float, float] | None:
+    placed_polys: list[Polygon] = []
+    for placed in page.placed_pieces:
+        poly = piece_to_shapely(placed.piece, include_tabs=True, gap_buffer=GAP_MM * 0.35)
+        if not poly.is_empty:
+            placed_polys.append(poly)
+
+    tree = STRtree(placed_polys) if placed_polys else None
+    candidates = _candidate_positions(placed_polys, usable_w, usable_h)
+
+    best: tuple[float, UnfoldPiece, int, float, float] | None = None
+
+    for rotation in range(4):
+        normalized = _normalize_to_origin(rotate_piece(piece, rotation))
+        min_x, min_y, max_x, max_y = piece_bounds(normalized, include_tabs=True)
+        width = max_x - min_x
+        height = max_y - min_y
+        if width > usable_w or height > usable_h:
+            continue
+
+        for cx, cy in candidates:
+            x = cx - min_x
+            y = cy - min_y
+            trial = translate_piece(normalized, x, y)
+            trial_poly = piece_to_shapely(trial, include_tabs=True, gap_buffer=0.0)
+            if trial_poly.is_empty:
+                continue
+            if not _fits_usable(trial_poly, usable_box):
+                continue
+            if tree is not None and _collides(trial_poly, placed_polys, tree):
+                continue
+
+            score = y * 10000 + x
+            if best is None or score < best[0]:
+                best = (score, normalized, rotation, x, y)
+
+    if best is None:
+        return None
+    _, normalized, rotation, x, y = best
+    return normalized, rotation, x, y
+
+
+def _fits_usable(trial: Polygon, usable_box: Polygon) -> bool:
+    if not usable_box.intersects(trial):
+        return False
+    overflow = trial.difference(usable_box).area
+    return overflow <= COLLISION_EPS_MM2
+
+
+def _collides(trial: Polygon, placed: list[Polygon], tree: STRtree) -> bool:
+    for idx in tree.query(trial):
+        other = placed[int(idx)]
+        if not trial.intersects(other):
+            continue
+        if trial.touches(other):
+            continue
+        if trial.intersection(other).area > COLLISION_EPS_MM2:
+            return True
+    return False
+
+
+def _candidate_positions(
+    placed: list[Polygon],
+    usable_w: float,
+    usable_h: float,
+) -> list[tuple[float, float]]:
+    """Bottom-left candidate anchors from page origin and placed piece corners."""
+    xs = {MARGIN_MM}
+    ys = {MARGIN_MM}
+
+    for poly in placed:
+        minx, miny, maxx, maxy = poly.bounds
+        xs.update((minx, maxx + GAP_MM))
+        ys.update((miny, maxy + GAP_MM))
+
+    xs = sorted(x for x in xs if MARGIN_MM <= x <= MARGIN_MM + usable_w)
+    ys = sorted(y for y in ys if MARGIN_MM <= y <= MARGIN_MM + usable_h)
+
+    if not xs:
+        xs = [MARGIN_MM]
+    if not ys:
+        ys = [MARGIN_MM]
+
+    candidates: list[tuple[float, float]] = []
+    for y in ys:
+        for x in xs:
+            candidates.append((x, y))
+
+    candidates.sort(key=lambda pos: (pos[1], pos[0]))
+    return candidates
 
 
 def _bbox_area(piece: UnfoldPiece) -> float:
@@ -111,51 +216,26 @@ def _normalize_to_origin(piece: UnfoldPiece) -> UnfoldPiece:
     return translate_piece(piece, -min_x, -min_y)
 
 
-def _best_orientation(
-    piece: UnfoldPiece,
-    usable_w: float,
-    usable_h: float,
-    *,
-    allow_scale: bool = False,
-) -> tuple[UnfoldPiece, float, float, bool]:
-    """
-    Pick 0° or 90° rotation (and optional uniform scale) that fits usable area.
-
-    Returns (piece, width, height, was_scaled).
-    """
-    candidates: list[tuple[UnfoldPiece, float, float]] = []
-
-    for candidate in (piece, rotate_piece_90(piece)):
-        normalized = _normalize_to_origin(candidate)
-        min_x, min_y, max_x, max_y = piece_bounds(normalized, include_tabs=True)
-        width = max_x - min_x
-        height = max_y - min_y
-        candidates.append((normalized, width, height))
-
-    # Prefer orientations that fit without scaling
-    fitting = [
-        (normalized, width, height)
-        for normalized, width, height in candidates
-        if width <= usable_w and height <= usable_h
-    ]
-
-    if fitting:
-        normalized, width, height = min(fitting, key=lambda item: item[2])
-        return normalized, width, height, False
-
-    if not allow_scale:
-        normalized, width, height = min(candidates, key=lambda item: item[1] * item[2])
-        return normalized, width, height, False
-
-    normalized, width, height = min(candidates, key=lambda item: item[1] * item[2])
-    scale = min(usable_w / width, usable_h / height) * 0.98
-    scaled_piece = _scale_piece(normalized, scale)
-    min_x, min_y, max_x, max_y = piece_bounds(scaled_piece, include_tabs=True)
-    return scaled_piece, max_x - min_x, max_y - min_y, True
+def _scale_piece_to_fit(piece: UnfoldPiece, usable_w: float, usable_h: float) -> UnfoldPiece:
+    best = piece
+    best_area = float("inf")
+    for rotation in range(4):
+        candidate = _normalize_to_origin(rotate_piece(piece, rotation))
+        min_x, min_y, max_x, max_y = piece_bounds(candidate, include_tabs=True)
+        width = max(max_x - min_x, 1e-6)
+        height = max(max_y - min_y, 1e-6)
+        scale = min(usable_w / width, usable_h / height) * 0.98
+        scaled = _scale_piece(candidate, scale)
+        min_x, min_y, max_x, max_y = piece_bounds(scaled, include_tabs=True)
+        area = (max_x - min_x) * (max_y - min_y)
+        if area < best_area:
+            best_area = area
+            best = scaled
+    best.id = f"{piece.id}-scaled"
+    return best
 
 
 def _scale_piece(piece: UnfoldPiece, scale: float) -> UnfoldPiece:
-    """Uniformly scale a piece around its origin."""
     from app.models.geometry import CutLine, FoldLine, Point2D, Tab
 
     def scale_point(p: Point2D) -> Point2D:
@@ -191,6 +271,7 @@ def _scale_piece(piece: UnfoldPiece, scale: float) -> UnfoldPiece:
                 id=c.id,
                 start=scale_point(c.start),
                 end=scale_point(c.end),
+                mesh_edge=c.mesh_edge,
             )
             for c in piece.cut_lines
         ],

@@ -35,6 +35,7 @@ class CutLine:
     id: str
     start: Point2D
     end: Point2D
+    mesh_edge: tuple[int, int] | None = None
 
 
 @dataclass
