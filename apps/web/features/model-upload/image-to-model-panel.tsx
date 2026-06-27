@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { generateFromImage } from "@/lib/api";
+import { pollGenerationJob } from "@/lib/generation-job";
 import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { Style } from "@/types";
@@ -28,6 +29,8 @@ export function ImageToModelPanel() {
   const [hint, setHint] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState("");
   const { setGenerationResult, addLog, setError } = useStudioStore();
 
   const handleFile = useCallback((file: File | null) => {
@@ -43,6 +46,8 @@ export function ImageToModelPanel() {
     }
 
     setIsGenerating(true);
+    setProgress(0);
+    setProgressMessage("");
     setError(null);
     addLog(`Generating 3D model from image: ${selectedFile.name}`);
 
@@ -52,17 +57,44 @@ export function ImageToModelPanel() {
         style,
         hint: hint.trim() || undefined,
       });
+
+      let sourceFileUrl = data.sourceFileUrl;
+      let sourceImageUrl = data.sourceImageUrl;
+      let aiProvider = data.aiProvider;
+      let enhancedPrompt = data.enhancedPrompt;
+
+      if (data.async && data.jobId) {
+        addLog(`Queued (${aiProvider}). Job: ${data.jobId}`);
+        const job = await pollGenerationJob(data.jobId, {
+          onProgress: (update) => {
+            setProgress(update.progress);
+            setProgressMessage(update.message);
+            if (update.message) {
+              addLog(update.message);
+            }
+          },
+        });
+        sourceFileUrl = job.sourceFileUrl;
+        sourceImageUrl = job.sourceImageUrl ?? sourceImageUrl;
+        enhancedPrompt = job.enhancedPrompt ?? enhancedPrompt;
+        aiProvider = job.provider;
+      }
+
+      if (!sourceFileUrl) {
+        throw new Error("Generation completed but no model URL was returned.");
+      }
+
       setGenerationResult({
         projectId: data.projectId,
-        sourceFileUrl: data.sourceFileUrl,
+        sourceFileUrl,
         fileName: selectedFile.name.replace(/\.[^.]+$/, "") + ".glb",
         sourceType: "image_to_3d",
         sourcePrompt: data.sourcePrompt,
-        sourceImageUrl: data.sourceImageUrl,
-        aiProvider: data.aiProvider,
-        enhancedPrompt: data.enhancedPrompt,
+        sourceImageUrl,
+        aiProvider,
+        enhancedPrompt,
       });
-      addLog(`AI model ready (${data.aiProvider}). Project: ${data.projectId}`);
+      addLog(`AI model ready (${aiProvider}). Project: ${data.projectId}`);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Image generation failed.";
@@ -70,6 +102,8 @@ export function ImageToModelPanel() {
       addLog(`Error: ${message}`);
     } finally {
       setIsGenerating(false);
+      setProgress(0);
+      setProgressMessage("");
     }
   };
 
@@ -154,6 +188,21 @@ export function ImageToModelPanel() {
           </SelectContent>
         </Select>
       </div>
+
+      {isGenerating && progress > 0 && (
+        <div className="space-y-1 rounded-xl border bg-muted/40 px-3 py-2">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{progressMessage || "Generating…"}</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <Button

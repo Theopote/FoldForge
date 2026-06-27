@@ -1,32 +1,61 @@
-# FoldForge AI Generation (Phase 2)
+# FoldForge AI Generation (Phase 2+)
 
 ## Overview
 
-Phase 2 adds **Text-to-3D** and **Image-to-3D** inputs before the existing papercraft pipeline.
+Phase 2 adds **Text-to-3D** and **Image-to-3D** inputs before the existing papercraft pipeline. Production providers run in an **async job queue** with frontend polling.
 
 ```mermaid
 flowchart LR
-  A[Text / Image / Upload] --> B[AI Provider]
-  B --> C[GLB in storage]
-  C --> D[Existing papercraft pipeline]
-  D --> E[PDF / SVG / ZIP]
+  A[Text / Image / Upload] --> B{Provider}
+  B -->|mock| C[Sync GLB]
+  B -->|Meshy / TripoSR / Replicate| D[Job Queue]
+  D --> E[Poll GET /generation-jobs/id]
+  E --> C
+  C --> F[Papercraft pipeline]
+  F --> G[PDF / SVG / ZIP]
 ```
 
 ## Providers
 
-| Provider | Config | Behavior |
-|----------|--------|----------|
-| `mock` (default) | none | Offline procedural text meshes + image heightmap relief |
-| `replicate` | `REPLICATE_API_TOKEN` | Calls Replicate API; falls back to mock on failure |
+| Provider | Config | Text | Image | Async |
+|----------|--------|------|-------|-------|
+| `auto` (default) | picks best available | ✓ | ✓ | when production |
+| `mock` | none | ✓ | ✓ | optional |
+| `meshy` | `MESHY_API_KEY` | ✓ | ✓ | ✓ |
+| `triposr` | `REPLICATE_API_TOKEN` + `TRIPOSR_REPLICATE_VERSION` | procedural fallback | ✓ | ✓ |
+| `replicate` | `REPLICATE_API_TOKEN` | ✓ | ✓ | ✓ |
 
 Set in `apps/api/.env`:
 
 ```env
-AI_PROVIDER=mock
+AI_PROVIDER=auto
+MESHY_API_KEY=
 REPLICATE_API_TOKEN=
-REPLICATE_TEXT_MODEL=
-REPLICATE_IMAGE_MODEL=
+TRIPOSR_REPLICATE_VERSION=
 ```
+
+### Auto selection order
+
+1. **Meshy** — if `MESHY_API_KEY` is set (text + image, low-poly preview mode)
+2. **TripoSR** — if Replicate token + TripoSR version (image; text uses procedural fallback)
+3. **Replicate** — if token set (generic models)
+4. **Mock** — offline procedural / heightmap
+
+## Async generation queue
+
+Production providers return **HTTP 202** with a `jobId`. Poll until `status` is `completed` or `failed`.
+
+```http
+POST /api/generate-from-text
+→ 202 { projectId, jobId, async: true, status: "processing" }
+
+GET /api/generation-jobs/{jobId}
+→ { status, progress, message, sourceFileUrl? }
+```
+
+Job statuses: `queued` → `running` → `completed` | `failed`
+
+The worker starts automatically via FastAPI lifespan (`generation_queue.py`).
 
 ## API Endpoints
 
@@ -34,6 +63,12 @@ REPLICATE_IMAGE_MODEL=
 
 ```http
 GET /api/ai/providers
+```
+
+### Poll generation job
+
+```http
+GET /api/generation-jobs/{jobId}
 ```
 
 ### Text to 3D
@@ -61,37 +96,41 @@ hint: optional text hint
 name: optional project name
 ```
 
-Both return a `projectId` and `sourceFileUrl` (GLB), same as upload — then call `POST /api/process-model`.
+Both return a `projectId` and eventually `sourceFileUrl` (GLB) — then call `POST /api/process-model`.
 
-## Prompt Enhancement
+## Meshy integration
 
-All prompts are wrapped with papercraft-specific guidance via `prompt_builder.py`:
+Uses Meshy REST API with papercraft-friendly settings:
 
-- Low Poly → faceted, printable faces
-- Cute → rounded, chibi proportions
-- Geometric → angular sculpture forms
+- **Text:** `POST /openapi/v2/text-to-3d` with `mode: preview`, `model_type: lowpoly`
+- **Image:** `POST /openapi/v1/image-to-3d` with `should_texture: false`, `target_formats: ["glb"]`
+
+Images are sent as base64 data URIs from local storage.
+
+## TripoSR integration
+
+TripoSR runs via [Replicate](https://replicate.com) using `TRIPOSR_REPLICATE_VERSION` (model version hash). Install optional dependency:
+
+```bash
+pip install replicate
+```
 
 ## Architecture
 
 ```
 app/services/ai/
   base.py              # ModelGeneratorProvider interface
-  prompt_builder.py    # Style-aware prompts
-  procedural.py        # Offline text → mesh heuristics
-  heightmap.py         # Offline image → relief mesh
-  registry.py          # Provider selection
+  generation_queue.py  # Background worker
+  job_store.py         # In-memory job store
+  http_utils.py        # Download + data URI helpers
+  registry.py          # auto | meshy | triposr | replicate | mock
   providers/
-    mock.py            # Default offline provider
-    replicate.py       # Optional cloud provider
+    mock.py
+    meshy.py
+    triposr.py
+    replicate.py
 ```
 
-Replace or extend providers without changing the API contract.
+## Frontend polling
 
-## Upgrading to Real AI
-
-1. Obtain a [Replicate](https://replicate.com) API token
-2. Set model version IDs for text/image models (e.g. TripoSR for images)
-3. Set `AI_PROVIDER=replicate`
-4. Restart the API
-
-The mock provider remains the fallback for development and when tokens are absent.
+`apps/web/lib/generation-job.ts` exposes `pollGenerationJob(jobId)` used by Text/Image panels with progress UI.
