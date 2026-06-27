@@ -3,6 +3,7 @@
 from pydantic import BaseModel, Field
 
 from app.schemas.model import ProjectSettings, ProjectStatus
+from app.schemas.stats import CraftabilityScore, ProcessStats
 
 
 class ProcessModelRequest(BaseModel):
@@ -10,21 +11,6 @@ class ProcessModelRequest(BaseModel):
     settings: ProjectSettings
 
     model_config = {"populate_by_name": True}
-
-
-class ProcessStats(BaseModel):
-    faces: int = 0
-    pieces: int = 0
-    pages: int = 0
-    difficulty_score: int = Field(alias="difficultyScore", default=0)
-
-    model_config = {"populate_by_name": True}
-
-
-class CraftabilityScore(BaseModel):
-    score: int
-    level: str
-    warnings: list[str] = Field(default_factory=list)
 
 
 class ProcessModelResponse(BaseModel):

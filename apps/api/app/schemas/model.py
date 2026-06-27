@@ -6,7 +6,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from app.schemas.unfold import CraftabilityScore, ProcessStats
+from app.schemas.stats import CraftabilityScore, ProcessStats
 
 
 class SourceType(str, Enum):

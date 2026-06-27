@@ -3,12 +3,8 @@
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.model import ProjectStatus
-from app.schemas.unfold import (
-    CraftabilityScore,
-    ProcessModelRequest,
-    ProcessModelResponse,
-    ProcessStats,
-)
+from app.schemas.stats import CraftabilityScore, ProcessStats
+from app.schemas.unfold import ProcessModelRequest, ProcessModelResponse
 from app.services.papercraft_pipeline import run_pipeline
 from app.services.project_store import project_store
 from app.utils.file_utils import resolve_storage_path
