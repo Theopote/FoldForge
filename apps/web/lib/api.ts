@@ -33,12 +33,17 @@ export type ProcessModelResponse = {
 export type GenerateModelResponse = {
   projectId: string;
   sourceType: string;
-  sourceFileUrl: string;
+  sourceFileUrl?: string;
   sourcePrompt?: string;
   sourceImageUrl?: string;
   aiProvider: string;
   enhancedPrompt?: string;
   status: string;
+  jobId?: string;
+  async?: boolean;
+  jobStatus?: string;
+  progress?: number;
+  message?: string;
 };
 
 export type ApiErrorBody = {
@@ -100,6 +105,7 @@ export async function processModel(
 
 /**
  * Generate a 3D model from a text prompt (Phase 2).
+ * Production providers may return 202 + jobId for async polling.
  */
 export async function generateFromText(payload: {
   prompt: string;
@@ -112,16 +118,18 @@ export async function generateFromText(payload: {
     body: JSON.stringify(payload),
   });
 
+  const body = (await response.json().catch(() => ({}))) as GenerateModelResponse & ApiErrorBody;
+
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
     throw new Error(parseApiError(body, "Text generation failed."));
   }
 
-  return response.json() as Promise<GenerateModelResponse>;
+  return body;
 }
 
 /**
  * Generate a 3D model from a reference image (Phase 2).
+ * Production providers may return 202 + jobId for async polling.
  */
 export async function generateFromImage(payload: {
   file: File;
@@ -140,10 +148,11 @@ export async function generateFromImage(payload: {
     body: formData,
   });
 
+  const body = (await response.json().catch(() => ({}))) as GenerateModelResponse & ApiErrorBody;
+
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
     throw new Error(parseApiError(body, "Image generation failed."));
   }
 
-  return response.json() as Promise<GenerateModelResponse>;
+  return body;
 }
