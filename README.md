@@ -89,8 +89,8 @@ Open:
 | 2 | ✅ Done | Homepage, Studio UI, placeholders |
 | 3 | ✅ Done | Model upload + project ID |
 | 4 | ✅ Done | 3D preview (OBJ/STL/GLB) + mesh stats |
-| 5 | 🔜 Next | Geometry processing pipeline |
-| 6 | 🔜 | End-to-end generate & download |
+| 5 | ✅ Done | Geometry pipeline + SVG/PDF export |
+| 6 | 🔜 Next | End-to-end polish + ZIP |
 | 7 | 🔜 | Craftability score |
 | 8 | 🔜 | Polish & ZIP export |
 

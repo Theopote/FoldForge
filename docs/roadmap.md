@@ -6,8 +6,8 @@
 - [x] Homepage + Studio UI
 - [x] Upload → project ID
 - [x] Three.js 3D preview
-- [ ] Mesh pipeline (clean, simplify, unfold)
-- [ ] SVG / PDF export
+- [x] Mesh pipeline (clean, simplify, unfold)
+- [x] SVG / PDF export
 - [ ] Craftability score
 - [ ] ZIP download
 
