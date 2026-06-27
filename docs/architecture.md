@@ -1,0 +1,50 @@
+# FoldForge Architecture
+
+## High-Level Flow
+
+```mermaid
+flowchart LR
+  A[Upload 3D] --> B[Mesh Clean]
+  B --> C[Simplify]
+  C --> D[Seam Selection]
+  D --> E[Unfold Patches]
+  E --> F[Tabs + Labels]
+  F --> G[Page Layout]
+  G --> H[SVG / PDF Export]
+```
+
+## Apps
+
+### `apps/web`
+
+Next.js App Router frontend. Proxies `/api/*` and `/storage/*` to FastAPI via `next.config.ts` rewrites.
+
+State: Zustand (`store/studio-store.ts`).
+
+### `apps/api`
+
+FastAPI service with modular routers and geometry services.
+
+| Layer | Responsibility |
+|-------|----------------|
+| `routers/` | HTTP endpoints |
+| `schemas/` | Pydantic request/response models |
+| `services/` | Business & geometry logic |
+| `utils/` | File I/O, logging, geometry helpers |
+
+MVP uses in-memory `ProjectStore`; replace with PostgreSQL + Prisma later.
+
+## Storage
+
+```
+storage/
+  uploads/     {projectId}.glb
+  processed/   {projectId}_processed.glb
+  exports/     {projectId}.svg, {projectId}.pdf
+```
+
+Served at `/storage/*` via FastAPI `StaticFiles`.
+
+## Extensibility
+
+Geometry services (`unfolder.py`, `seam_generator.py`, etc.) are stubbed with clear module boundaries so advanced algorithms can swap in without changing API contracts.

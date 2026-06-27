@@ -1,0 +1,36 @@
+"""FoldForge API configuration."""
+
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    app_name: str = "FoldForge API"
+    app_version: str = "0.1.0"
+    debug: bool = True
+
+    # Paths relative to monorepo root
+    storage_root: Path = Path(__file__).resolve().parents[3] / "storage"
+    uploads_dir: Path = storage_root / "uploads"
+    processed_dir: Path = storage_root / "processed"
+    exports_dir: Path = storage_root / "exports"
+
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+    max_upload_size_mb: int = 50
+    allowed_extensions: set[str] = {".obj", ".stl", ".glb", ".gltf", ".fbx"}
+
+
+settings = Settings()
+
+# Ensure storage directories exist at startup
+for directory in (settings.uploads_dir, settings.processed_dir, settings.exports_dir):
+    directory.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,17 @@
+{
+  "name": "foldforge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FoldForge / 纸模工坊 — Turn imagination into printable paper models.",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:web": "npm run dev --prefix apps/web",
+    "dev:api": "cd apps/api && py -3.12 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "build:web": "npm run build --prefix apps/web",
+    "lint:web": "npm run lint --prefix apps/web",
+    "install:web": "npm install --prefix apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
