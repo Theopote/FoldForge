@@ -13,7 +13,6 @@ from app.models.geometry import Point2D
 
 ABF_NEWTON_MAX_ITER = 30
 ABF_NEWTON_TOL = 1e-6
-ABF_POSITION_ITERATIONS = 12
 TWO_PI = 2.0 * math.pi
 
 
@@ -168,7 +167,7 @@ def abf_parameterize(
     Sheffer-style ABF: optimize corner angles then re-embed interior vertices.
 
     Phase 1 — angle adjustment with 2π constraint at interior vertices.
-    Phase 2 — gradient descent on vertex positions to match target angles.
+    Phase 2 — BFS face re-embedding from optimized angles and 3D edge lengths.
     """
     index_set = set(vertex_indices)
     local_faces = [face for face in faces if all(int(v) in index_set for v in face)]
@@ -194,16 +193,204 @@ def abf_parameterize(
         for key, value in zip(keys, solved):
             beta[key] = float(value)
 
-    # Phase 2 — move interior vertices toward target wedge angles
-    for _ in range(ABF_POSITION_ITERATIONS):
-        for vi in interior:
-            keys = wedges_by_vertex.get(vi, [])
-            if len(keys) < 3:
-                continue
-            gradient = _angle_mismatch_gradient(coords, keys, beta)
-            coords[vi] = coords[vi] - 0.35 * gradient
+    coords = abf_reembed_from_angles(
+        vertices,
+        local_faces,
+        vertex_indices,
+        uv_map,
+        beta,
+        interior,
+        index_set,
+    )
 
     return {vi: Point2D(float(coords[vi][0]), float(coords[vi][1])) for vi in vertex_indices}
+
+
+def abf_reembed_from_angles(
+    vertices: np.ndarray,
+    local_faces: list[np.ndarray],
+    vertex_indices: list[int],
+    uv_map: dict[int, Point2D],
+    target_angles: dict[tuple[tuple[int, int, int], int], float],
+    interior: list[int],
+    patch_vertices: set[int],
+) -> dict[int, np.ndarray]:
+    """
+    Phase 2 — place interior vertices by BFS face expansion.
+
+    Boundary vertices stay pinned to the seed UV; each unplaced corner is solved
+    from its two face neighbors using 3D edge lengths and the optimized wedge angle.
+    """
+    from collections import deque
+
+    boundary = {
+        vi
+        for vi in vertex_indices
+        if _is_boundary_vertex(vi, local_faces, patch_vertices)
+    }
+
+    coords: dict[int, np.ndarray] = {
+        vi: np.array([uv_map[vi].x, uv_map[vi].y], dtype=np.float64)
+        for vi in vertex_indices
+    }
+    placed_interior: set[int] = set()
+
+    if not local_faces:
+        return coords
+
+    edge_to_faces: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for fi, face in enumerate(local_faces):
+        loop = [int(v) for v in face]
+        for i in range(3):
+            a, b = loop[i], loop[(i + 1) % 3]
+            key = (a, b) if a < b else (b, a)
+            edge_to_faces[key].append(fi)
+
+    face_neighbors: dict[int, set[int]] = defaultdict(set)
+    for face_indices in edge_to_faces.values():
+        for i in face_indices:
+            for j in face_indices:
+                if i != j:
+                    face_neighbors[i].add(j)
+
+    queue: deque[int] = deque([0])
+    visited_faces = {0}
+
+    def try_place_in_face(fi: int) -> None:
+        face = local_faces[fi]
+        loop = [int(v) for v in face]
+        face_key = tuple(loop)
+
+        for vi in loop:
+            if vi in boundary or vi in placed_interior:
+                continue
+            neighbors = [v for v in loop if v != vi]
+            if not all(n in coords for n in neighbors):
+                continue
+
+            pa = coords[neighbors[0]]
+            pb = coords[neighbors[1]]
+            len_a = _edge_length_3d(vertices, vi, neighbors[0])
+            len_b = _edge_length_3d(vertices, vi, neighbors[1])
+            target = target_angles.get((face_key, vi))
+            if target is None:
+                target = _angle_at_vertex_3d(vertices, face, vi) or (math.pi / 3.0)
+
+            coords[vi] = _place_third_vertex_2d(pa, pb, len_a, len_b, target)
+            placed_interior.add(vi)
+
+    try_place_in_face(0)
+
+    while queue:
+        fi = queue.popleft()
+        try_place_in_face(fi)
+        for neighbor in face_neighbors.get(fi, ()):
+            if neighbor not in visited_faces:
+                visited_faces.add(neighbor)
+                queue.append(neighbor)
+
+    for vi in interior:
+        if vi in placed_interior:
+            continue
+        for face in local_faces:
+            loop = [int(v) for v in face]
+            if vi not in loop:
+                continue
+            face_key = tuple(loop)
+            others = [v for v in loop if v != vi]
+            if not all(o in coords for o in others):
+                continue
+            pa = coords[others[0]]
+            pb = coords[others[1]]
+            len_a = _edge_length_3d(vertices, vi, others[0])
+            len_b = _edge_length_3d(vertices, vi, others[1])
+            target = target_angles.get((face_key, vi))
+            if target is None:
+                target = _angle_at_vertex_3d(vertices, face, vi) or (math.pi / 3.0)
+            coords[vi] = _place_third_vertex_2d(pa, pb, len_a, len_b, target)
+            placed_interior.add(vi)
+            break
+
+    return coords
+
+
+def _edge_length_3d(vertices: np.ndarray, a: int, b: int) -> float:
+    return float(np.linalg.norm(vertices[a] - vertices[b]))
+
+
+def _circle_circle_intersections(
+    center_a: np.ndarray,
+    radius_a: float,
+    center_b: np.ndarray,
+    radius_b: float,
+) -> list[np.ndarray]:
+    """Return 0, 1, or 2 intersection points of two circles in 2D."""
+    if radius_a < 1e-12 or radius_b < 1e-12:
+        return []
+
+    delta = center_b - center_a
+    dist = float(np.linalg.norm(delta))
+    if dist < 1e-12:
+        return []
+
+    if dist > radius_a + radius_b + 1e-6:
+        return []
+    if dist < abs(radius_a - radius_b) - 1e-6:
+        return []
+
+    unit = delta / dist
+    perp = np.array([-unit[1], unit[0]], dtype=np.float64)
+    chord = (radius_a * radius_a - radius_b * radius_b + dist * dist) / (2.0 * dist)
+    mid = center_a + chord * unit
+    height_sq = radius_a * radius_a - chord * chord
+
+    if height_sq < 0.0:
+        height_sq = 0.0
+    height = math.sqrt(height_sq)
+
+    if height < 1e-9:
+        return [mid]
+
+    return [mid + height * perp, mid - height * perp]
+
+
+def _place_third_vertex_2d(
+    pa: np.ndarray,
+    pb: np.ndarray,
+    len_ca: float,
+    len_cb: float,
+    target_angle: float,
+) -> np.ndarray:
+    """Place vertex C given A, B and 3D edge lengths using circle intersection."""
+    candidates = _circle_circle_intersections(pa, len_ca, pb, len_cb)
+    if not candidates:
+        ab = pb - pa
+        lab = float(np.linalg.norm(ab))
+        if lab < 1e-12:
+            return pa.copy()
+        direction = ab / lab
+        cos_t = math.cos(target_angle)
+        sin_t = math.sin(target_angle)
+        rotated = np.array(
+            [cos_t * direction[0] - sin_t * direction[1], sin_t * direction[0] + cos_t * direction[1]],
+            dtype=np.float64,
+        )
+        return pa + rotated * len_ca
+
+    if len(candidates) == 1:
+        return candidates[0]
+
+    def angle_error(pc: np.ndarray) -> float:
+        va = pa - pc
+        vb = pb - pc
+        la = float(np.linalg.norm(va))
+        lb = float(np.linalg.norm(vb))
+        if la < 1e-12 or lb < 1e-12:
+            return float("inf")
+        cos_a = float(np.clip(np.dot(va, vb) / (la * lb), -1.0, 1.0))
+        return abs(math.acos(cos_a) - target_angle)
+
+    return min(candidates, key=angle_error)
 
 
 def _sheffer_newton_vertex_angles(

@@ -71,13 +71,24 @@ def _draw_piece_pdf(
         pdf.setStrokeColorRGB(0.07, 0.09, 0.15)
         pdf.setLineWidth(0.4)
         pdf.setDash()
-        for cut in piece.cut_lines:
-            pdf.line(
-                cut.start.x * mm,
-                _pdf_y(page_height_mm, cut.start.y),
-                cut.end.x * mm,
-                _pdf_y(page_height_mm, cut.end.y),
+        if piece.cut_outline and len(piece.cut_outline) >= 3:
+            path = pdf.beginPath()
+            path.moveTo(
+                piece.cut_outline[0].x * mm,
+                _pdf_y(page_height_mm, piece.cut_outline[0].y),
             )
+            for point in piece.cut_outline[1:]:
+                path.lineTo(point.x * mm, _pdf_y(page_height_mm, point.y))
+            path.close()
+            pdf.drawPath(path, stroke=1, fill=0)
+        else:
+            for cut in piece.cut_lines:
+                pdf.line(
+                    cut.start.x * mm,
+                    _pdf_y(page_height_mm, cut.start.y),
+                    cut.end.x * mm,
+                    _pdf_y(page_height_mm, cut.end.y),
+                )
 
     if settings.add_fold_lines:
         for fold in piece.fold_lines:
@@ -95,7 +106,7 @@ def _draw_piece_pdf(
                 _pdf_y(page_height_mm, fold.end.y),
             )
 
-    if settings.add_tabs:
+    if settings.add_tabs and not piece.cut_outline:
         pdf.setDash()
         for tab in piece.tabs:
             if len(tab.polygon) < 3:
@@ -115,6 +126,21 @@ def _draw_piece_pdf(
                 pdf.setFillColorRGB(0.28, 0.33, 0.41)
                 pdf.setFont("Helvetica", 6)
                 pdf.drawCentredString(cx * mm, _pdf_y(page_height_mm, cy), tab.label)
+
+    if settings.add_tabs and piece.cut_outline:
+        pdf.setDash()
+        for tab in piece.tabs:
+            if not settings.add_numbers or not tab.label:
+                continue
+            if tab.polygon:
+                cx = sum(p.x for p in tab.polygon) / len(tab.polygon)
+                cy = sum(p.y for p in tab.polygon) / len(tab.polygon)
+            else:
+                cx = sum(p.x for p in piece.cut_outline) / len(piece.cut_outline)
+                cy = sum(p.y for p in piece.cut_outline) / len(piece.cut_outline)
+            pdf.setFillColorRGB(0.28, 0.33, 0.41)
+            pdf.setFont("Helvetica", 6)
+            pdf.drawCentredString(cx * mm, _pdf_y(page_height_mm, cy), tab.label)
 
     if settings.add_numbers and piece.label:
         cx = sum(p.x for p in piece.polygon) / max(len(piece.polygon), 1)

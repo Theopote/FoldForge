@@ -172,35 +172,13 @@ def no_fit_polygon_convex(stationary: Polygon, orbiting: Polygon) -> Polygon:
 
 def no_fit_polygon(stationary: Polygon, orbiting: Polygon) -> Polygon | MultiPolygon:
     """
-    Non-convex NFP via convex decomposition + Minkowski sums.
+    Exact non-convex NFP via orbiting algorithm, with decomposition fallback.
 
-    NFP(A, B) ≈ ⋃_{a∈A*, b∈B*} (a ⊕ (-b)) where A*, B* are convex parts.
+    NFP(A, B) is the locus of reference-point positions where B touches A without overlap.
     """
-    if stationary.is_empty or orbiting.is_empty:
-        return Polygon()
+    from app.services.nfp_orbiting import no_fit_polygon_exact
 
-    stationary_parts = decompose_to_convex_parts(stationary)
-    orbiting_parts = decompose_to_convex_parts(reflect_at_origin(orbiting))
-
-    if not stationary_parts or not orbiting_parts:
-        return no_fit_polygon_convex(stationary, orbiting)
-
-    nfp_parts: list[Polygon] = []
-    for s_part in stationary_parts:
-        s_convex = s_part.convex_hull
-        for o_part in orbiting_parts:
-            o_convex = o_part.convex_hull
-            nfp = minkowski_sum_convex(s_convex, o_convex)
-            if not nfp.is_empty and nfp.area > 1e-6:
-                nfp_parts.append(nfp)
-
-    if not nfp_parts:
-        return no_fit_polygon_convex(stationary, orbiting)
-
-    merged = unary_union(nfp_parts)
-    if merged.is_empty:
-        return no_fit_polygon_convex(stationary, orbiting)
-    return merged
+    return no_fit_polygon_exact(stationary, orbiting)
 
 
 def nfp_reference_point(polygon: Polygon) -> tuple[float, float]:

@@ -14,8 +14,15 @@ from shapely.geometry import Polygon, box
 from app.schemas.model import Difficulty, PaperSize
 from app.services.layout_engine import layout_pieces
 from app.services.nfp_packing import decompose_to_convex_parts, no_fit_polygon
+from app.services.nfp_orbiting import no_fit_polygon_orbiting
 from app.services.outline_optimizer import optimize_piece_cut_outline
-from app.services.parametrization import _sheffer_newton_vertex_angles, abf_parameterize, lscm_parameterize
+from app.services.parametrization import (
+    _angle_at_vertex_3d,
+    _sheffer_newton_vertex_angles,
+    abf_parameterize,
+    abf_reembed_from_angles,
+    lscm_parameterize,
+)
 from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
 from app.services.tab_generator import add_tabs_to_pieces
 from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
@@ -62,7 +69,37 @@ def test_nonconvex_nfp_decomposition() -> None:
     orbiting = box(0, 0, 15, 12)
     nfp = no_fit_polygon(l_shape, orbiting)
     assert not nfp.is_empty
-    print("nonconvex nfp:", len(parts), "convex parts")
+    orbiting_nfp = no_fit_polygon_orbiting(l_shape, orbiting)
+    assert not orbiting_nfp.is_empty
+    print("nonconvex nfp:", len(parts), "convex parts, orbiting area", round(orbiting_nfp.area, 1))
+
+
+def test_abf_analytical_reembed() -> None:
+    mesh = _box_mesh()
+    verts = sorted({int(v) for v in mesh.faces[0]})
+    uv = lscm_parameterize(mesh.vertices, mesh.faces, verts)
+    assert uv is not None
+    local_faces = [face for face in mesh.faces if all(int(v) in set(verts) for v in face)]
+    interior = [v for v in verts if len(local_faces) > 0]
+    beta = {}
+    for face in local_faces:
+        face_key = tuple(int(v) for v in face)
+        for vi in face:
+            vi_int = int(vi)
+            angle = _angle_at_vertex_3d(mesh.vertices, face, vi_int)
+            if angle is not None:
+                beta[(face_key, vi_int)] = angle
+    coords = abf_reembed_from_angles(
+        mesh.vertices,
+        local_faces,
+        verts,
+        uv,
+        beta,
+        interior,
+        set(verts),
+    )
+    assert len(coords) == len(verts)
+    print("abf analytical reembed: ok")
 
 
 def test_cut_outline_boolean() -> None:
@@ -120,6 +157,7 @@ def main() -> None:
     test_signed_dihedral_box()
     test_sheffer_newton_angles()
     test_lscm_and_abf()
+    test_abf_analytical_reembed()
     test_nonconvex_nfp_decomposition()
     test_cut_outline_boolean()
     test_seam_split_limits()
