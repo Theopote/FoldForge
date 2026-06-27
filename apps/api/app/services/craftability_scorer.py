@@ -46,7 +46,7 @@ def compute_craftability(
 
     small_pieces = 0
     for piece in pieces:
-        min_x, min_y, max_x, max_y = piece_bounds(piece)
+        min_x, min_y, max_x, max_y = piece_bounds(piece, include_tabs=True)
         min_dim = min(max_x - min_x, max_y - min_y)
         if min_dim < 12:
             small_pieces += 1

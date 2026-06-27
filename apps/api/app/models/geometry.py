@@ -46,6 +46,7 @@ class UnfoldPiece:
     fold_lines: list[FoldLine] = field(default_factory=list)
     cut_lines: list[CutLine] = field(default_factory=list)
     label: str = ""
+    has_overlap: bool = False
 
 
 @dataclass

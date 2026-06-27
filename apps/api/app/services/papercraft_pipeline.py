@@ -11,10 +11,10 @@ from app.services.mesh_cleaner import clean_mesh, mesh_quality_issues
 from app.services.mesh_simplifier import scale_to_target_height, simplify_mesh
 from app.services.model_loader import load_mesh
 from app.services.pdf_exporter import export_pdf
-from app.services.seam_generator import select_seams, split_into_patches
+from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
 from app.services.svg_exporter import export_svg
 from app.services.tab_generator import add_tabs_to_pieces
-from app.services.unfolder import unfold_mesh
+from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
 from app.services.zip_exporter import export_zip
 from app.utils.file_utils import build_storage_url
 
@@ -38,9 +38,11 @@ def run_pipeline(
     mesh = scale_to_target_height(mesh, settings.target_height_mm)
     mesh = simplify_mesh(mesh, settings.difficulty, settings.style)
 
-    seams = select_seams(mesh, settings.difficulty)
+    dihedral = compute_edge_dihedral_angles(mesh)
+    seams = select_seams(mesh, settings.difficulty, dihedral=dihedral)
     patches = split_into_patches(mesh, seams)
-    pieces = unfold_mesh(mesh, patches)
+    pieces = unfold_mesh(mesh, patches, dihedral=dihedral)
+    unfold_warnings = detect_unfold_overlaps(pieces)
     pieces = add_tabs_to_pieces(
         pieces,
         add_tabs=settings.add_tabs,
@@ -63,7 +65,7 @@ def run_pipeline(
         pieces,
         pages,
         settings.difficulty,
-        quality_warnings,
+        quality_warnings + unfold_warnings,
     )
 
     zip_path = app_settings.exports_dir / f"{project_id}.zip"

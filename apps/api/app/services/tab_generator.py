@@ -67,6 +67,7 @@ def add_tabs_to_pieces(
                 cut_lines=piece.cut_lines,
                 tabs=tabs,
                 label=piece.label,
+                has_overlap=piece.has_overlap,
             )
         )
 
