@@ -4,8 +4,8 @@
 
 - [x] Monorepo + Next.js + FastAPI scaffold
 - [x] Homepage + Studio UI
-- [ ] Upload → project ID
-- [ ] Three.js 3D preview
+- [x] Upload → project ID
+- [x] Three.js 3D preview
 - [ ] Mesh pipeline (clean, simplify, unfold)
 - [ ] SVG / PDF export
 - [ ] Craftability score

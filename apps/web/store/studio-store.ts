@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import type { ModelMeshStats } from "@/lib/geometry-stats";
 import {
   DEFAULT_PROJECT_SETTINGS,
   type CraftabilityScore,
@@ -11,6 +12,7 @@ import {
 type StudioState = {
   projectId: string | null;
   projectName: string;
+  sourceFileName: string | null;
   sourceFileUrl: string | null;
   processedModelUrl: string | null;
   unfoldSvgUrl: string | null;
@@ -18,13 +20,18 @@ type StudioState = {
   status: ProjectStatus;
   settings: ProjectSettings;
   stats: ProcessStats | null;
+  meshStats: ModelMeshStats | null;
   craftability: CraftabilityScore | null;
   logs: string[];
   error: string | null;
-  setProjectId: (id: string | null) => void;
-  setSourceFileUrl: (url: string | null) => void;
+  setUploadResult: (payload: {
+    projectId: string;
+    sourceFileUrl: string;
+    fileName: string;
+  }) => void;
   setStatus: (status: ProjectStatus) => void;
   updateSettings: (partial: Partial<ProjectSettings>) => void;
+  setMeshStats: (stats: ModelMeshStats | null) => void;
   setResults: (payload: {
     processedModelUrl?: string | null;
     unfoldSvgUrl?: string | null;
@@ -40,6 +47,7 @@ type StudioState = {
 const initialState = {
   projectId: null,
   projectName: "Untitled Project",
+  sourceFileName: null,
   sourceFileUrl: null,
   processedModelUrl: null,
   unfoldSvgUrl: null,
@@ -47,6 +55,7 @@ const initialState = {
   status: "created" as ProjectStatus,
   settings: DEFAULT_PROJECT_SETTINGS,
   stats: null,
+  meshStats: null,
   craftability: null,
   logs: [] as string[],
   error: null,
@@ -54,11 +63,25 @@ const initialState = {
 
 export const useStudioStore = create<StudioState>((set) => ({
   ...initialState,
-  setProjectId: (projectId) => set({ projectId }),
-  setSourceFileUrl: (sourceFileUrl) => set({ sourceFileUrl, status: "uploaded" }),
+  setUploadResult: ({ projectId, sourceFileUrl, fileName }) =>
+    set({
+      projectId,
+      sourceFileUrl,
+      sourceFileName: fileName,
+      projectName: fileName.replace(/\.[^.]+$/, ""),
+      status: "uploaded",
+      meshStats: null,
+      stats: null,
+      craftability: null,
+      unfoldSvgUrl: null,
+      unfoldPdfUrl: null,
+      processedModelUrl: null,
+      error: null,
+    }),
   setStatus: (status) => set({ status }),
   updateSettings: (partial) =>
     set((state) => ({ settings: { ...state.settings, ...partial } })),
+  setMeshStats: (meshStats) => set({ meshStats }),
   setResults: (payload) => set(payload),
   addLog: (message) =>
     set((state) => ({

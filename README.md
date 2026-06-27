@@ -87,9 +87,9 @@ Open:
 |------|--------|-------------|
 | 1 | ✅ Done | Project init, monorepo, README, basic API |
 | 2 | ✅ Done | Homepage, Studio UI, placeholders |
-| 3 | 🔜 Next | Model upload integration |
-| 4 | 🔜 | 3D preview (Three.js) |
-| 5 | 🔜 | Geometry processing pipeline |
+| 3 | ✅ Done | Model upload + project ID |
+| 4 | ✅ Done | 3D preview (OBJ/STL/GLB) + mesh stats |
+| 5 | 🔜 Next | Geometry processing pipeline |
 | 6 | 🔜 | End-to-end generate & download |
 | 7 | 🔜 | Craftability score |
 | 8 | 🔜 | Polish & ZIP export |

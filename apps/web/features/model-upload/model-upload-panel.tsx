@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { FileUp, Loader2, Upload } from "lucide-react";
+import { FileUp, Loader2, Sparkles, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { uploadModel } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 
@@ -13,35 +14,28 @@ export function ModelUploadPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const { sourceFileUrl, setProjectId, setSourceFileUrl, addLog, setError } =
-    useStudioStore();
+  const {
+    projectId,
+    sourceFileName,
+    sourceFileUrl,
+    setUploadResult,
+    addLog,
+    setError,
+  } = useStudioStore();
 
-  const handleFiles = useCallback(
-    async (files: FileList | null) => {
-      const file = files?.[0];
-      if (!file) return;
-
+  const uploadFile = useCallback(
+    async (file: File) => {
       setIsUploading(true);
       setError(null);
       addLog(`Uploading ${file.name}...`);
 
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const response = await fetch("/api/upload-model", {
-          method: "POST",
-          body: formData,
+        const data = await uploadModel(file);
+        setUploadResult({
+          projectId: data.projectId,
+          sourceFileUrl: data.sourceFileUrl,
+          fileName: file.name,
         });
-
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.detail ?? "Upload failed.");
-        }
-
-        const data = await response.json();
-        setProjectId(data.projectId);
-        setSourceFileUrl(data.sourceFileUrl);
         addLog(`Upload complete. Project ID: ${data.projectId}`);
       } catch (error) {
         const message =
@@ -52,8 +46,38 @@ export function ModelUploadPanel() {
         setIsUploading(false);
       }
     },
-    [addLog, setError, setProjectId, setSourceFileUrl],
+    [addLog, setError, setUploadResult],
   );
+
+  const handleFiles = useCallback(
+    (files: FileList | null) => {
+      const file = files?.[0];
+      if (!file) return;
+      void uploadFile(file);
+    },
+    [uploadFile],
+  );
+
+  const loadSample = useCallback(async () => {
+    setIsUploading(true);
+    setError(null);
+    addLog("Loading sample model (box.stl)...");
+
+    try {
+      const response = await fetch("/samples/box.stl");
+      if (!response.ok) throw new Error("Failed to load sample model.");
+
+      const blob = await response.blob();
+      const file = new File([blob], "box.stl", { type: "model/stl" });
+      await uploadFile(file);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Sample load failed.";
+      setError(message);
+      addLog(`Error: ${message}`);
+      setIsUploading(false);
+    }
+  }, [addLog, setError, uploadFile]);
 
   return (
     <div className="space-y-3">
@@ -74,13 +98,14 @@ export function ModelUploadPanel() {
         onDrop={(event) => {
           event.preventDefault();
           setIsDragging(false);
-          void handleFiles(event.dataTransfer.files);
+          handleFiles(event.dataTransfer.files);
         }}
         className={cn(
           "flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-colors",
           isDragging
             ? "border-primary bg-primary/5"
             : "border-border hover:border-primary/50 hover:bg-muted/40",
+          isUploading && "pointer-events-none opacity-70",
         )}
       >
         {isUploading ? (
@@ -99,25 +124,41 @@ export function ModelUploadPanel() {
           type="file"
           accept={ACCEPTED_TYPES}
           className="hidden"
-          onChange={(event) => void handleFiles(event.target.files)}
+          onChange={(event) => handleFiles(event.target.files)}
         />
       </div>
 
       {sourceFileUrl && (
-        <div className="flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          <FileUp className="h-4 w-4 shrink-0" />
-          <span className="truncate">Model uploaded and ready to generate</span>
+        <div className="space-y-1 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <FileUp className="h-4 w-4 shrink-0 text-primary" />
+            <span className="truncate font-medium text-foreground">
+              {sourceFileName}
+            </span>
+          </div>
+          {projectId && (
+            <p className="truncate pl-6 font-mono text-[10px]">ID: {projectId}</p>
+          )}
         </div>
       )}
 
-      <Button
-        variant="outline"
-        className="w-full"
-        disabled={isUploading}
-        onClick={() => inputRef.current?.click()}
-      >
-        Choose File
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          disabled={isUploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          Choose File
+        </Button>
+        <Button
+          variant="outline"
+          disabled={isUploading}
+          onClick={() => void loadSample()}
+        >
+          <Sparkles className="mr-1 h-4 w-4" />
+          Try Sample
+        </Button>
+      </div>
     </div>
   );
 }
