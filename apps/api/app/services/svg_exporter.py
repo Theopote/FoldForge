@@ -88,21 +88,35 @@ def _draw_piece(
     piece_group = drawing.g(id=piece.id)
 
     if settings.add_cut_lines:
-        for cut in piece.cut_lines:
+        if piece.cut_outline and len(piece.cut_outline) >= 3:
+            points = [
+                (p.x, _svg_y(page_height_mm, y_offset, p.y))
+                for p in piece.cut_outline
+            ]
             piece_group.add(
-                drawing.line(
-                    start=(
-                        cut.start.x,
-                        _svg_y(page_height_mm, y_offset, cut.start.y),
-                    ),
-                    end=(
-                        cut.end.x,
-                        _svg_y(page_height_mm, y_offset, cut.end.y),
-                    ),
+                drawing.polygon(
+                    points=points,
+                    fill="none",
                     stroke="#111827",
                     stroke_width=0.35,
                 )
             )
+        else:
+            for cut in piece.cut_lines:
+                piece_group.add(
+                    drawing.line(
+                        start=(
+                            cut.start.x,
+                            _svg_y(page_height_mm, y_offset, cut.start.y),
+                        ),
+                        end=(
+                            cut.end.x,
+                            _svg_y(page_height_mm, y_offset, cut.end.y),
+                        ),
+                        stroke="#111827",
+                        stroke_width=0.35,
+                    )
+                )
 
     if settings.add_fold_lines:
         for fold in piece.fold_lines:
@@ -124,7 +138,7 @@ def _draw_piece(
                 )
             )
 
-    if settings.add_tabs:
+    if settings.add_tabs and not piece.cut_outline:
         for tab in piece.tabs:
             points = [
                 (p.x, _svg_y(page_height_mm, y_offset, p.y))
@@ -145,6 +159,30 @@ def _draw_piece(
                     drawing.text(
                         tab.label,
                         insert=(cx, cy),
+                        fill="#475569",
+                        font_size="2.5mm",
+                        font_family="sans-serif",
+                        text_anchor="middle",
+                    )
+                )
+
+    if settings.add_tabs and piece.cut_outline:
+        for tab in piece.tabs:
+            if not tab.label:
+                continue
+            if tab.polygon:
+                cx = sum(p.x for p in tab.polygon) / len(tab.polygon)
+                cy = sum(p.y for p in tab.polygon) / len(tab.polygon)
+            elif piece.cut_outline:
+                cx = sum(p.x for p in piece.cut_outline) / len(piece.cut_outline)
+                cy = sum(p.y for p in piece.cut_outline) / len(piece.cut_outline)
+            else:
+                continue
+            if settings.add_numbers:
+                piece_group.add(
+                    drawing.text(
+                        tab.label,
+                        insert=(cx, _svg_y(page_height_mm, y_offset, cy)),
                         fill="#475569",
                         font_size="2.5mm",
                         font_family="sans-serif",

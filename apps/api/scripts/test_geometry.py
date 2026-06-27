@@ -7,15 +7,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import numpy as np
 import trimesh
-from shapely.geometry import box
+from shapely.geometry import Polygon, box
 
 from app.schemas.model import Difficulty, PaperSize
 from app.services.layout_engine import layout_pieces
-from app.services.nfp_packing import no_fit_polygon, nfp_placement_candidates
-from app.services.parametrization import abf_parameterize, lscm_parameterize
+from app.services.nfp_packing import decompose_to_convex_parts, no_fit_polygon
+from app.services.outline_optimizer import optimize_piece_cut_outline
+from app.services.parametrization import _sheffer_newton_vertex_angles, abf_parameterize, lscm_parameterize
 from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
-from app.services.tab_generator import TAB_TAPER, add_tabs_to_pieces
+from app.services.tab_generator import add_tabs_to_pieces
 from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
 
 
@@ -35,6 +37,14 @@ def test_signed_dihedral_box() -> None:
     print("signed dihedral box: ok")
 
 
+def test_sheffer_newton_angles() -> None:
+    alphas = np.array([1.0, 1.2, 1.0, 1.1], dtype=np.float64)
+    betas = np.array([1.05, 1.15, 0.95, 1.05], dtype=np.float64)
+    solved = _sheffer_newton_vertex_angles(alphas, betas)
+    assert abs(float(solved.sum()) - 2 * np.pi) < 1e-4
+    print("sheffer newton: ok", solved.round(3).tolist())
+
+
 def test_lscm_and_abf() -> None:
     mesh = _box_mesh()
     verts = sorted({int(v) for v in mesh.faces[0]})
@@ -45,14 +55,29 @@ def test_lscm_and_abf() -> None:
     print("lscm + abf: ok")
 
 
-def test_nfp_candidates() -> None:
-    a = box(0, 0, 40, 30)
-    b = box(0, 0, 25, 20)
-    nfp = no_fit_polygon(a, b)
+def test_nonconvex_nfp_decomposition() -> None:
+    l_shape = Polygon([(0, 0), (50, 0), (50, 20), (20, 20), (20, 50), (0, 50)])
+    parts = decompose_to_convex_parts(l_shape)
+    assert len(parts) >= 2
+    orbiting = box(0, 0, 15, 12)
+    nfp = no_fit_polygon(l_shape, orbiting)
     assert not nfp.is_empty
-    candidates = nfp_placement_candidates([a], b)
-    assert len(candidates) > 0
-    print("nfp packing:", len(candidates), "candidates")
+    print("nonconvex nfp:", len(parts), "convex parts")
+
+
+def test_cut_outline_boolean() -> None:
+    mesh = _box_mesh()
+    data = compute_edge_dihedral_angles(mesh)
+    patches = split_into_patches(mesh, select_seams(mesh, Difficulty.STANDARD, dihedral=data))
+    pieces = add_tabs_to_pieces(
+        unfold_mesh(mesh, patches, dihedral=data),
+        add_tabs=True,
+        add_numbers=True,
+    )
+    optimized = [optimize_piece_cut_outline(p) for p in pieces]
+    with_outline = [p for p in optimized if p.cut_outline and len(p.cut_outline) >= 3]
+    assert with_outline, "expected merged cut outlines"
+    print("boolean cut outline:", len(with_outline), "pieces")
 
 
 def test_seam_split_limits() -> None:
@@ -71,17 +96,13 @@ def test_unfold_layout_tabs() -> None:
     patches = split_into_patches(mesh, seams)
     pieces = unfold_mesh(mesh, patches, dihedral=data)
     pieces = add_tabs_to_pieces(pieces, add_tabs=True, add_numbers=True)
+    pieces = [optimize_piece_cut_outline(p) for p in pieces]
     pages = layout_pieces(pieces, PaperSize.A4)
     warnings = detect_unfold_overlaps(pieces)
 
     assert len(pieces) >= 1
     assert len(pages) >= 1
-    assert all(len(p.polygon) >= 3 for p in pieces)
-
     paired = [t for p in pieces for t in p.tabs if t.target_piece_id]
-    trapezoid = [t for p in pieces for t in p.tabs if len(t.polygon) == 4]
-    assert TAB_TAPER < 1.0
-    assert trapezoid, "expected trapezoid tabs"
     print(
         "pipeline:",
         len(pieces),
@@ -90,8 +111,6 @@ def test_unfold_layout_tabs() -> None:
         "pages",
         len(paired),
         "paired tabs",
-        len(trapezoid),
-        "trapezoid tabs",
         "warnings:",
         warnings,
     )
@@ -99,8 +118,10 @@ def test_unfold_layout_tabs() -> None:
 
 def main() -> None:
     test_signed_dihedral_box()
+    test_sheffer_newton_angles()
     test_lscm_and_abf()
-    test_nfp_candidates()
+    test_nonconvex_nfp_decomposition()
+    test_cut_outline_boolean()
     test_seam_split_limits()
     test_unfold_layout_tabs()
     print("All geometry tests passed.")

@@ -411,6 +411,16 @@ def piece_to_shapely(
     gap_buffer: float = 0.0,
 ) -> Polygon:
     """Build a Shapely polygon for layout collision tests."""
+    if piece.cut_outline and len(piece.cut_outline) >= 3:
+        try:
+            merged = Polygon([p.as_tuple() for p in piece.cut_outline])
+            if gap_buffer > 0 and not merged.is_empty:
+                merged = merged.buffer(gap_buffer)
+            if merged.is_valid and not merged.is_empty:
+                return merged
+        except Exception:
+            pass
+
     polys: list[Polygon] = []
     if len(piece.polygon) >= 3:
         try:
@@ -449,10 +459,13 @@ def piece_bounds(
     *,
     include_tabs: bool = False,
 ) -> tuple[float, float, float, float]:
-    points = list(piece.polygon)
-    if include_tabs:
-        for tab in piece.tabs:
-            points.extend(tab.polygon)
+    if piece.cut_outline and (include_tabs or len(piece.cut_outline) >= 3):
+        points = list(piece.cut_outline)
+    else:
+        points = list(piece.polygon)
+        if include_tabs:
+            for tab in piece.tabs:
+                points.extend(tab.polygon)
     if not points:
         return 0.0, 0.0, 0.0, 0.0
     xs = [p.x for p in points]
@@ -461,12 +474,13 @@ def piece_bounds(
 
 
 def piece_polygon_area(piece: UnfoldPiece) -> float:
-    if len(piece.polygon) < 3:
+    outline = piece.cut_outline if piece.cut_outline else piece.polygon
+    if len(outline) < 3:
         return 0.0
     try:
-        return float(Polygon([p.as_tuple() for p in piece.polygon]).area)
+        return float(Polygon([p.as_tuple() for p in outline]).area)
     except Exception:
-        min_x, min_y, max_x, max_y = piece_bounds(piece)
+        min_x, min_y, max_x, max_y = piece_bounds(piece, include_tabs=bool(piece.cut_outline))
         return max(0.0, (max_x - min_x) * (max_y - min_y))
 
 
@@ -505,6 +519,11 @@ def translate_piece(piece: UnfoldPiece, dx: float, dy: float) -> UnfoldPiece:
             )
             for line in piece.cut_lines
         ],
+        cut_outline=(
+            [Point2D(p.x + dx, p.y + dy) for p in piece.cut_outline]
+            if piece.cut_outline
+            else None
+        ),
     )
 
 
@@ -552,6 +571,7 @@ def rotate_piece(piece: UnfoldPiece, quarter_turns: int) -> UnfoldPiece:
             )
             for line in piece.cut_lines
         ],
+        cut_outline=([rot(p) for p in piece.cut_outline] if piece.cut_outline else None),
     )
 
 

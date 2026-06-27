@@ -11,7 +11,8 @@ import scipy.sparse.linalg as spla
 
 from app.models.geometry import Point2D
 
-ABF_ANGLE_ITERATIONS = 24
+ABF_NEWTON_MAX_ITER = 30
+ABF_NEWTON_TOL = 1e-6
 ABF_POSITION_ITERATIONS = 12
 TWO_PI = 2.0 * math.pi
 
@@ -181,25 +182,17 @@ def abf_parameterize(
     interior = _interior_vertices(local_faces, index_set)
     wedges_by_vertex = _wedges_by_vertex(local_faces, interior)
 
-    # Phase 1 — optimize β angles toward 3D α with 2π sum constraint
+    # Phase 1 — Sheffer Newton angle solve per interior vertex
     beta = dict(corner_2d)
-    for _ in range(ABF_ANGLE_ITERATIONS):
-        for vi in interior:
-            keys = wedges_by_vertex.get(vi, [])
-            if len(keys) < 3:
-                continue
-
-            alphas = np.array([corner_3d[k] for k in keys], dtype=np.float64)
-            betas = np.array([beta[k] for k in keys], dtype=np.float64)
-            if float(alphas.sum()) < 1e-8:
-                continue
-
-            target = alphas / float(alphas.sum()) * TWO_PI
-            betas = 0.65 * target + 0.35 * betas
-            betas = betas / float(betas.sum()) * TWO_PI
-
-            for key, value in zip(keys, betas):
-                beta[key] = float(value)
+    for vi in interior:
+        keys = wedges_by_vertex.get(vi, [])
+        if len(keys) < 3:
+            continue
+        alphas = np.array([corner_3d[k] for k in keys], dtype=np.float64)
+        betas = np.array([beta[k] for k in keys], dtype=np.float64)
+        solved = _sheffer_newton_vertex_angles(alphas, betas)
+        for key, value in zip(keys, solved):
+            beta[key] = float(value)
 
     # Phase 2 — move interior vertices toward target wedge angles
     for _ in range(ABF_POSITION_ITERATIONS):
@@ -211,6 +204,51 @@ def abf_parameterize(
             coords[vi] = coords[vi] - 0.35 * gradient
 
     return {vi: Point2D(float(coords[vi][0]), float(coords[vi][1])) for vi in vertex_indices}
+
+
+def _sheffer_newton_vertex_angles(
+    alphas: np.ndarray,
+    betas: np.ndarray,
+    *,
+    max_iter: int = ABF_NEWTON_MAX_ITER,
+    tol: float = ABF_NEWTON_TOL,
+) -> np.ndarray:
+    """
+    Sheffer ABF Phase-1 Newton solve for wedge angles at one interior vertex.
+
+    Minimizes Σ ((βᵢ - αᵢ) / αᵢ)² subject to Σ βᵢ = 2π using projected Newton steps.
+    """
+    n = len(alphas)
+    if n == 0:
+        return betas
+    if n == 1:
+        return np.array([TWO_PI], dtype=np.float64)
+
+    beta = np.clip(betas.astype(np.float64), 1e-4, np.pi - 1e-4)
+    if float(beta.sum()) < 1e-8:
+        beta = np.full(n, TWO_PI / n, dtype=np.float64)
+    else:
+        beta = beta / float(beta.sum()) * TWO_PI
+
+    inv_a2 = 1.0 / np.maximum(alphas * alphas, 1e-10)
+
+    for _ in range(max_iter):
+        err = beta - alphas
+        if float(np.max(np.abs(err))) < tol and abs(float(beta.sum()) - TWO_PI) < tol:
+            break
+
+        grad = inv_a2 * err
+        grad -= float(grad.mean())
+
+        hess_diag = inv_a2
+        step = -grad / hess_diag
+        step -= float(step.mean())
+
+        beta = beta + 0.85 * step
+        beta = np.clip(beta, 1e-4, np.pi - 1e-4)
+        beta = beta / float(beta.sum()) * TWO_PI
+
+    return beta
 
 
 def _abf_lite_refine(

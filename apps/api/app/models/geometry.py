@@ -48,6 +48,7 @@ class UnfoldPiece:
     cut_lines: list[CutLine] = field(default_factory=list)
     label: str = ""
     has_overlap: bool = False
+    cut_outline: list[Point2D] | None = None
 
 
 @dataclass

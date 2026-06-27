@@ -13,6 +13,7 @@ from app.services.model_loader import load_mesh
 from app.services.pdf_exporter import export_pdf
 from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
 from app.services.svg_exporter import export_svg
+from app.services.outline_optimizer import optimize_pieces_cut_outlines
 from app.services.tab_generator import add_tabs_to_pieces
 from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
 from app.services.zip_exporter import export_zip
@@ -48,6 +49,8 @@ def run_pipeline(
         add_tabs=settings.add_tabs,
         add_numbers=settings.add_numbers,
     )
+    if settings.add_tabs:
+        pieces = optimize_pieces_cut_outlines(pieces)
 
     pages = layout_pieces(pieces, settings.paper_size)
 

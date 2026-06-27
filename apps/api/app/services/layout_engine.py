@@ -292,4 +292,7 @@ def _scale_piece(piece: UnfoldPiece, scale: float) -> UnfoldPiece:
             )
             for c in piece.cut_lines
         ],
+        cut_outline=(
+            [scale_point(p) for p in piece.cut_outline] if piece.cut_outline else None
+        ),
     )
