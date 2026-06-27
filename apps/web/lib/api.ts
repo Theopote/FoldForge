@@ -6,6 +6,29 @@ export type UploadModelResponse = {
   status: string;
 };
 
+export type ProcessStats = {
+  faces: number;
+  pieces: number;
+  pages: number;
+  difficultyScore: number;
+};
+
+export type CraftabilityScore = {
+  score: number;
+  level: string;
+  warnings: string[];
+};
+
+export type ProcessModelResponse = {
+  projectId: string;
+  status: string;
+  processedModelUrl?: string;
+  unfoldSvgUrl?: string;
+  unfoldPdfUrl?: string;
+  stats?: ProcessStats;
+  craftability?: CraftabilityScore;
+};
+
 export type ApiErrorBody = {
   detail?: string | Array<{ msg?: string; type?: string }>;
 };
@@ -40,4 +63,25 @@ export async function uploadModel(file: File): Promise<UploadModelResponse> {
   }
 
   return response.json() as Promise<UploadModelResponse>;
+}
+
+/**
+ * Run the papercraft generation pipeline for a project.
+ */
+export async function processModel(
+  projectId: string,
+  settings: Record<string, unknown>,
+): Promise<ProcessModelResponse> {
+  const response = await fetch("/api/process-model", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, settings }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Processing failed."));
+  }
+
+  return response.json() as Promise<ProcessModelResponse>;
 }
