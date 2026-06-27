@@ -67,7 +67,7 @@ npm run dev
 ```bash
 # Terminal 1 — API (port 8000)
 cd apps/api
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --reload-dir app --reload-delay 0.4 --host 0.0.0.0 --port 8000
 
 # Terminal 2 — Web (port 3000)
 cd apps/web

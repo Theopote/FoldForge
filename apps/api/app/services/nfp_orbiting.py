@@ -6,8 +6,14 @@ import math
 
 from shapely.geometry import MultiPoint, Polygon
 from shapely.ops import polygonize, unary_union
+from shapely.prepared import prep
 
-from app.services.nfp_packing import decompose_to_convex_parts, minkowski_sum_convex, reflect_at_origin
+from app.services.nfp_packing import (
+    _is_convex_ring,
+    decompose_to_convex_parts,
+    minkowski_sum_convex,
+    reflect_at_origin,
+)
 
 TOUCH_EPS = 1e-4
 OVERLAP_EPS = 1e-5
@@ -38,11 +44,14 @@ def _translate_ring(ring: list[tuple[float, float]], tx: float, ty: float) -> li
     return [(x + tx, y + ty) for x, y in ring]
 
 
-def _ring_to_polygon(ring: list[tuple[float, float]]) -> Polygon:
+def _ring_polygon(ring: list[tuple[float, float]]) -> Polygon:
     if len(ring) < 3:
         return Polygon()
     poly = Polygon(ring)
-    return poly.buffer(0) if not poly.is_valid else poly
+    if poly.is_valid and not poly.is_empty:
+        return poly
+    cleaned = poly.buffer(0)
+    return cleaned if not cleaned.is_empty else Polygon()
 
 
 def _is_valid_touch_placement(
@@ -50,12 +59,15 @@ def _is_valid_touch_placement(
     b_ring: list[tuple[float, float]],
     tx: float,
     ty: float,
+    *,
+    prepared_stationary,
 ) -> bool:
-    moved = _ring_to_polygon(_translate_ring(b_ring, tx, ty))
+    moved = _ring_polygon(_translate_ring(b_ring, tx, ty))
     if moved.is_empty:
         return False
-    if stationary.intersection(moved).area > OVERLAP_EPS:
-        return False
+    if prepared_stationary.intersects(moved):
+        if stationary.intersection(moved).area > OVERLAP_EPS:
+            return False
     return stationary.distance(moved) <= TOUCH_EPS
 
 
@@ -74,11 +86,11 @@ def _edge_edge_translations(
         return []
 
     dot = (ax * bx + ay * by) / (la * lb)
-    if dot > -0.82:
+    if dot > -0.85:
         return []
 
     translations: list[tuple[float, float]] = []
-    for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+    for t in (0.0, 0.5, 1.0):
         px = a0[0] + ax * t
         py = a0[1] + ay * t
         translations.append((px - b0[0], py - b0[1]))
@@ -87,20 +99,21 @@ def _edge_edge_translations(
 
 
 def _collect_touch_translations(
+    stationary: Polygon,
     a_ring: list[tuple[float, float]],
     b_ring: list[tuple[float, float]],
 ) -> list[tuple[float, float]]:
-    stationary = _ring_to_polygon(a_ring)
     if stationary.is_empty:
         return []
 
+    prepared = prep(stationary)
     candidates: set[tuple[float, float]] = set()
 
     for ax, ay in a_ring:
         for bx, by in b_ring:
             tx, ty = ax - bx, ay - by
-            if _is_valid_touch_placement(stationary, b_ring, tx, ty):
-                candidates.add((round(tx, 4), round(ty, 4)))
+            if _is_valid_touch_placement(stationary, b_ring, tx, ty, prepared_stationary=prepared):
+                candidates.add((round(tx, 3), round(ty, 3)))
 
     n_a = len(a_ring)
     n_b = len(b_ring)
@@ -109,8 +122,8 @@ def _collect_touch_translations(
         for j in range(n_b):
             b0, b1 = b_ring[j], b_ring[(j + 1) % n_b]
             for tx, ty in _edge_edge_translations(a0, a1, b0, b1):
-                if _is_valid_touch_placement(stationary, b_ring, tx, ty):
-                    candidates.add((round(tx, 4), round(ty, 4)))
+                if _is_valid_touch_placement(stationary, b_ring, tx, ty, prepared_stationary=prepared):
+                    candidates.add((round(tx, 3), round(ty, 3)))
 
     return list(candidates)
 
@@ -125,7 +138,7 @@ def _pick_start_translation(
 
     a_bottom = min(a_ring, key=lambda p: (p[1], p[0]))
     b_top = max(b_ring, key=lambda p: p[1])
-    preferred = (round(a_bottom[0] - b_top[0], 4), round(a_bottom[1] - b_top[1], 4))
+    preferred = (round(a_bottom[0] - b_top[0], 3), round(a_bottom[1] - b_top[1], 3))
 
     if preferred in candidates:
         return preferred
@@ -142,7 +155,7 @@ def _angular_distance(ref: tuple[float, float], a: tuple[float, float], b: tuple
 
 
 def _orbiting_walk(
-    a_ring: list[tuple[float, float]],
+    stationary: Polygon,
     b_ring: list[tuple[float, float]],
     candidates: list[tuple[float, float]],
     start: tuple[float, float],
@@ -151,18 +164,20 @@ def _orbiting_walk(
     if len(candidates) < 3:
         return candidates
 
-    stationary = _ring_to_polygon(a_ring)
+    prepared = prep(stationary)
     remaining = set(candidates)
     path = [start]
     remaining.discard(start)
     current = start
-    max_steps = len(candidates) * 2
+    max_steps = min(len(candidates) * 2, 512)
 
     for _ in range(max_steps):
         neighbors = [
             point
             for point in remaining
-            if _is_valid_touch_placement(stationary, b_ring, point[0], point[1])
+            if _is_valid_touch_placement(
+                stationary, b_ring, point[0], point[1], prepared_stationary=prepared,
+            )
         ]
         if not neighbors:
             break
@@ -213,6 +228,33 @@ def _polygon_from_orbit_path(path: list[tuple[float, float]]) -> Polygon:
     return Polygon()
 
 
+def _polygon_is_convex(polygon: Polygon) -> bool:
+    if polygon.is_empty:
+        return False
+    coords = list(polygon.exterior.coords[:-1])
+    return _is_convex_ring(coords)
+
+
+def _nfp_convex_decomposition(stationary: Polygon, reflected: Polygon) -> Polygon:
+    s_parts = decompose_to_convex_parts(stationary)
+    b_parts = decompose_to_convex_parts(reflected)
+    if not s_parts or not b_parts:
+        return minkowski_sum_convex(stationary.convex_hull, reflected.convex_hull)
+
+    parts: list[Polygon] = []
+    for s_part in s_parts:
+        for b_part in b_parts:
+            nfp = minkowski_sum_convex(s_part.convex_hull, b_part.convex_hull)
+            if not nfp.is_empty:
+                parts.append(nfp)
+
+    if not parts:
+        return Polygon()
+
+    merged = unary_union(parts)
+    return merged.buffer(0) if not merged.is_empty else Polygon()
+
+
 def no_fit_polygon_orbiting(stationary: Polygon, orbiting: Polygon) -> Polygon:
     """
     Compute NFP(A, B) by orbiting -B around A.
@@ -235,7 +277,7 @@ def no_fit_polygon_orbiting(stationary: Polygon, orbiting: Polygon) -> Polygon:
     if len(a_ring) < 3 or len(b_ring) < 3:
         return Polygon()
 
-    candidates = _collect_touch_translations(a_ring, b_ring)
+    candidates = _collect_touch_translations(stationary, a_ring, b_ring)
     if len(candidates) < 3:
         return Polygon()
 
@@ -243,33 +285,30 @@ def no_fit_polygon_orbiting(stationary: Polygon, orbiting: Polygon) -> Polygon:
     if start is None:
         return Polygon()
 
-    path = _orbiting_walk(a_ring, b_ring, candidates, start)
+    path = _orbiting_walk(stationary, b_ring, candidates, start)
     nfp = _polygon_from_orbit_path(path)
-    return nfp.buffer(0) if not nfp.is_empty else Polygon()
+    if nfp.is_empty:
+        return Polygon()
+    return nfp if nfp.is_valid else nfp.buffer(0)
 
 
 def no_fit_polygon_exact(stationary: Polygon, orbiting: Polygon) -> Polygon:
-    """Exact non-convex NFP with orbiting; falls back to convex decomposition."""
+    """Exact NFP: convex Minkowski, non-convex orbiting, decomposition fallback."""
+    if stationary.is_empty or orbiting.is_empty:
+        return Polygon()
+
+    reflected = reflect_at_origin(orbiting)
+    stationary_convex = _polygon_is_convex(stationary)
+    orbiting_convex = _polygon_is_convex(orbiting)
+
+    if stationary_convex and orbiting_convex:
+        return minkowski_sum_convex(stationary, reflected)
+
+    if stationary_convex:
+        return _nfp_convex_decomposition(stationary, reflected)
+
     orbiting_nfp = no_fit_polygon_orbiting(stationary, orbiting)
     if not orbiting_nfp.is_empty and orbiting_nfp.area > 1e-4:
         return orbiting_nfp
 
-    reflected = reflect_at_origin(orbiting)
-    s_parts = decompose_to_convex_parts(stationary)
-    b_parts = decompose_to_convex_parts(reflected)
-    if not s_parts or not b_parts:
-        base = stationary.convex_hull
-        return minkowski_sum_convex(base, reflected.convex_hull)
-
-    parts: list[Polygon] = []
-    for s_part in s_parts:
-        for b_part in b_parts:
-            nfp = minkowski_sum_convex(s_part.convex_hull, b_part.convex_hull)
-            if not nfp.is_empty:
-                parts.append(nfp)
-
-    if not parts:
-        return Polygon()
-
-    merged = unary_union(parts)
-    return merged.buffer(0) if not merged.is_empty else Polygon()
+    return _nfp_convex_decomposition(stationary, reflected)
