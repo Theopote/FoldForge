@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -15,7 +15,7 @@ const STATUS_PROGRESS: Record<string, number> = {
 };
 
 export function ProcessingLogPanel() {
-  const { status, logs, error } = useStudioStore();
+  const { status, logs, error, craftability } = useStudioStore();
 
   return (
     <Card className="border-border/70 shadow-none">
@@ -34,9 +34,23 @@ export function ProcessingLogPanel() {
           </div>
         )}
 
-        <div className="max-h-32 overflow-y-auto rounded-xl bg-muted/40 p-3 font-mono text-xs text-muted-foreground">
+        {craftability && craftability.warnings.length > 0 && (
+          <div className="rounded-xl bg-amber-50 px-3 py-2.5">
+            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-900">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Craftability notes
+            </p>
+            <ul className="space-y-1 text-xs text-amber-800">
+              {craftability.warnings.map((warning) => (
+                <li key={warning}>• {warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="max-h-40 overflow-y-auto rounded-xl bg-muted/40 p-3 font-mono text-xs text-muted-foreground">
           {logs.length === 0 ? (
-            <p>Waiting for activity...</p>
+            <p>Waiting for activity…</p>
           ) : (
             logs.map((line, index) => <p key={`${line}-${index}`}>{line}</p>)
           )}

@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.unfold import CraftabilityScore, ProcessStats
+
 
 class SourceType(str, Enum):
     UPLOAD_3D = "upload_3d"
@@ -70,8 +72,11 @@ class Project(BaseModel):
     processed_model_url: Optional[str] = Field(alias="processedModelUrl", default=None)
     unfold_svg_url: Optional[str] = Field(alias="unfoldSvgUrl", default=None)
     unfold_pdf_url: Optional[str] = Field(alias="unfoldPdfUrl", default=None)
+    unfold_zip_url: Optional[str] = Field(alias="unfoldZipUrl", default=None)
     status: ProjectStatus = ProjectStatus.CREATED
     settings: ProjectSettings = Field(default_factory=ProjectSettings)
+    stats: Optional[ProcessStats] = None
+    craftability: Optional[CraftabilityScore] = None
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,13 +16,18 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { processModel } from "@/lib/api";
+import { saveStudioProject } from "@/lib/project-storage";
 import { useStudioStore } from "@/store/studio-store";
+import type { CraftabilityScore } from "@/types";
 
 export function ProjectSettingsPanel() {
   const {
     settings,
     updateSettings,
     projectId,
+    projectName,
+    sourceFileName,
+    sourceFileUrl,
     status,
     setStatus,
     setResults,
@@ -46,8 +52,9 @@ export function ProjectSettingsPanel() {
         processedModelUrl: data.processedModelUrl,
         unfoldSvgUrl: data.unfoldSvgUrl,
         unfoldPdfUrl: data.unfoldPdfUrl,
+        unfoldZipUrl: data.unfoldZipUrl,
         stats: data.stats,
-        craftability: data.craftability,
+        craftability: data.craftability as CraftabilityScore | undefined,
       });
       setStatus(data.status as typeof status);
 
@@ -60,7 +67,25 @@ export function ProjectSettingsPanel() {
         addLog(
           `Craftability: ${data.craftability.score}/100 (${data.craftability.level})`,
         );
+        for (const warning of data.craftability.warnings) {
+          addLog(`Note: ${warning}`);
+        }
       }
+
+      saveStudioProject({
+        projectId: projectId!,
+        projectName,
+        sourceFileName,
+        sourceFileUrl,
+        processedModelUrl: data.processedModelUrl ?? null,
+        unfoldSvgUrl: data.unfoldSvgUrl ?? null,
+        unfoldPdfUrl: data.unfoldPdfUrl ?? null,
+        unfoldZipUrl: data.unfoldZipUrl ?? null,
+        status: data.status as typeof status,
+        settings,
+        stats: data.stats ?? null,
+        craftability: (data.craftability as CraftabilityScore) ?? null,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Generation failed.";
@@ -203,6 +228,12 @@ export function ProjectSettingsPanel() {
         >
           {status === "processing" ? "Generating..." : "Generate Template"}
         </Button>
+
+        {status === "ready" && projectId && (
+          <Button variant="outline" className="w-full" asChild>
+            <Link href={`/projects/${projectId}`}>View Project Details</Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

@@ -33,6 +33,7 @@ class ProcessModelResponse(BaseModel):
     processed_model_url: str | None = Field(alias="processedModelUrl", default=None)
     unfold_svg_url: str | None = Field(alias="unfoldSvgUrl", default=None)
     unfold_pdf_url: str | None = Field(alias="unfoldPdfUrl", default=None)
+    unfold_zip_url: str | None = Field(alias="unfoldZipUrl", default=None)
     stats: ProcessStats | None = None
     craftability: CraftabilityScore | None = None
 

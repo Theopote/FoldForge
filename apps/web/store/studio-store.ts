@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { ModelMeshStats } from "@/lib/geometry-stats";
+import type { SavedStudioProject } from "@/lib/project-storage";
 import {
   DEFAULT_PROJECT_SETTINGS,
   type CraftabilityScore,
@@ -17,6 +18,7 @@ type StudioState = {
   processedModelUrl: string | null;
   unfoldSvgUrl: string | null;
   unfoldPdfUrl: string | null;
+  unfoldZipUrl: string | null;
   status: ProjectStatus;
   settings: ProjectSettings;
   stats: ProcessStats | null;
@@ -36,9 +38,11 @@ type StudioState = {
     processedModelUrl?: string | null;
     unfoldSvgUrl?: string | null;
     unfoldPdfUrl?: string | null;
+    unfoldZipUrl?: string | null;
     stats?: ProcessStats | null;
     craftability?: CraftabilityScore | null;
   }) => void;
+  restoreProject: (saved: SavedStudioProject) => void;
   addLog: (message: string) => void;
   setError: (message: string | null) => void;
   reset: () => void;
@@ -52,6 +56,7 @@ const initialState = {
   processedModelUrl: null,
   unfoldSvgUrl: null,
   unfoldPdfUrl: null,
+  unfoldZipUrl: null,
   status: "created" as ProjectStatus,
   settings: DEFAULT_PROJECT_SETTINGS,
   stats: null,
@@ -75,6 +80,7 @@ export const useStudioStore = create<StudioState>((set) => ({
       craftability: null,
       unfoldSvgUrl: null,
       unfoldPdfUrl: null,
+      unfoldZipUrl: null,
       processedModelUrl: null,
       error: null,
     }),
@@ -82,7 +88,23 @@ export const useStudioStore = create<StudioState>((set) => ({
   updateSettings: (partial) =>
     set((state) => ({ settings: { ...state.settings, ...partial } })),
   setMeshStats: (meshStats) => set({ meshStats }),
-  setResults: (payload) => set(payload),
+  setResults: (payload) => set((state) => ({ ...state, ...payload })),
+  restoreProject: (saved) =>
+    set({
+      projectId: saved.projectId,
+      projectName: saved.projectName,
+      sourceFileName: saved.sourceFileName,
+      sourceFileUrl: saved.sourceFileUrl,
+      processedModelUrl: saved.processedModelUrl,
+      unfoldSvgUrl: saved.unfoldSvgUrl,
+      unfoldPdfUrl: saved.unfoldPdfUrl,
+      unfoldZipUrl: saved.unfoldZipUrl,
+      status: saved.status,
+      settings: saved.settings,
+      stats: saved.stats,
+      craftability: saved.craftability,
+      error: null,
+    }),
   addLog: (message) =>
     set((state) => ({
       logs: [...state.logs, `[${new Date().toLocaleTimeString()}] ${message}`],

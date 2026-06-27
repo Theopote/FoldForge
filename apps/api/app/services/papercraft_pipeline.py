@@ -15,6 +15,7 @@ from app.services.seam_generator import select_seams, split_into_patches
 from app.services.svg_exporter import export_svg
 from app.services.tab_generator import add_tabs_to_pieces
 from app.services.unfolder import unfold_mesh
+from app.services.zip_exporter import export_zip
 from app.utils.file_utils import build_storage_url
 
 
@@ -23,6 +24,7 @@ def run_pipeline(
     source_path: Path,
     project_name: str,
     settings: ProjectSettings,
+    source_original_path: Path | None = None,
 ) -> PipelineResult:
     """
     Execute load → clean → simplify → seam → unfold → tabs → layout → export.
@@ -64,12 +66,36 @@ def run_pipeline(
         quality_warnings,
     )
 
+    zip_path = app_settings.exports_dir / f"{project_id}.zip"
+    zip_files: dict[str, Path] = {
+        "unfold.pdf": pdf_path,
+        "unfold.svg": svg_path,
+        "model.glb": processed_path,
+    }
+    if source_original_path and source_original_path.exists():
+        zip_files[f"source{source_original_path.suffix.lower()}"] = source_original_path
+
+    export_zip(
+        zip_path,
+        project_name,
+        zip_files,
+        stats={
+            "faces": len(mesh.faces),
+            "pieces": len(pieces),
+            "pages": len(pages),
+            "craftability": craft_score,
+            "level": craft_level,
+        },
+        warnings=craft_warnings,
+    )
+
     difficulty_score = _difficulty_score(len(mesh.faces), len(pieces), len(pages))
 
     return PipelineResult(
         processed_mesh_path=build_storage_url(Path("processed") / processed_path.name),
         svg_path=build_storage_url(Path("exports") / svg_path.name),
         pdf_path=build_storage_url(Path("exports") / pdf_path.name),
+        zip_path=build_storage_url(Path("exports") / zip_path.name),
         pieces=pieces,
         pages=pages,
         face_count=len(mesh.faces),

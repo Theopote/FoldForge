@@ -32,6 +32,7 @@ export type Project = {
   processedModelUrl?: string;
   unfoldSvgUrl?: string;
   unfoldPdfUrl?: string;
+  unfoldZipUrl?: string;
   status: ProjectStatus;
   settings: ProjectSettings;
   createdAt: string;

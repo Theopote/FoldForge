@@ -25,6 +25,7 @@ export type ProcessModelResponse = {
   processedModelUrl?: string;
   unfoldSvgUrl?: string;
   unfoldPdfUrl?: string;
+  unfoldZipUrl?: string;
   stats?: ProcessStats;
   craftability?: CraftabilityScore;
 };

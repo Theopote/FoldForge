@@ -71,6 +71,7 @@ class PipelineResult:
     processed_mesh_path: str
     svg_path: str
     pdf_path: str
+    zip_path: str
     pieces: list[UnfoldPiece]
     pages: list[LayoutPage]
     face_count: int

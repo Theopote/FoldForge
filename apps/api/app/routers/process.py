@@ -48,13 +48,26 @@ async def process_model(request: ProcessModelRequest) -> ProcessModelResponse:
             source_path=source_path,
             project_name=project.name,
             settings=request.settings,
+            source_original_path=source_path,
         )
 
         project.status = ProjectStatus.READY
         project.processed_model_url = result.processed_mesh_path
         project.unfold_svg_url = result.svg_path
         project.unfold_pdf_url = result.pdf_path
+        project.unfold_zip_url = result.zip_path
         project.settings = request.settings
+        project.stats = ProcessStats(
+            faces=result.face_count,
+            pieces=len(result.pieces),
+            pages=len(result.pages),
+            difficultyScore=result.difficulty_score,
+        )
+        project.craftability = CraftabilityScore(
+            score=result.craftability_score,
+            level=result.craftability_level,
+            warnings=result.warnings,
+        )
         project_store.update(project)
 
         return ProcessModelResponse(
@@ -63,6 +76,7 @@ async def process_model(request: ProcessModelRequest) -> ProcessModelResponse:
             processedModelUrl=result.processed_mesh_path,
             unfoldSvgUrl=result.svg_path,
             unfoldPdfUrl=result.pdf_path,
+            unfoldZipUrl=result.zip_path,
             stats=ProcessStats(
                 faces=result.face_count,
                 pieces=len(result.pieces),
