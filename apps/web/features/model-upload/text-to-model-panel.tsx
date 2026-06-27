@@ -59,9 +59,6 @@ export function TextToModelPanel() {
           onProgress: (update) => {
             setProgress(update.progress);
             setProgressMessage(update.message);
-            if (update.message) {
-              addLog(update.message);
-            }
           },
         });
         sourceFileUrl = job.sourceFileUrl;

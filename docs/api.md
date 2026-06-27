@@ -64,7 +64,13 @@ Fields: `file`, `style`, optional `hint`, `name`.
 GET /api/ai/providers
 ```
 
-See [ai.md](./ai.md) for provider configuration.
+Production providers return **202 Accepted** with `jobId`. Poll:
+
+```http
+GET /api/generation-jobs/{jobId}
+```
+
+See [ai.md](./ai.md) for provider configuration (Meshy, TripoSR, async queue).
 
 ## Get Project
 
