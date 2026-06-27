@@ -12,6 +12,8 @@ import { useStudioStore } from "@/store/studio-store";
 export function ModelPreviewPanel() {
   const {
     sourceFileUrl,
+    sourceType,
+    aiProvider,
     status,
     meshStats,
     stats,
@@ -56,6 +58,14 @@ export function ModelPreviewPanel() {
           3D Preview
         </CardTitle>
         <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs capitalize">
+            {sourceType.replace(/_/g, " ")}
+          </Badge>
+          {aiProvider && (
+            <Badge variant="outline" className="text-xs">
+              AI: {aiProvider}
+            </Badge>
+          )}
           <Badge variant="outline" className="text-xs">
             Craftability: {craftability ? `${craftability.score}` : "—"}
           </Badge>

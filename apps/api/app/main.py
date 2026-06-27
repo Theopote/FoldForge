@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import export, health, process, upload
+from app.routers import export, generate, health, process, upload
 
 app = FastAPI(
     title=settings.app_name,
@@ -30,6 +30,7 @@ app.mount(
 
 app.include_router(health.router)
 app.include_router(upload.router, prefix="/api", tags=["upload"])
+app.include_router(generate.router, prefix="/api", tags=["generate"])
 app.include_router(process.router, prefix="/api", tags=["process"])
 app.include_router(export.router, prefix="/api", tags=["export"])
 

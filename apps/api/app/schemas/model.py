@@ -73,6 +73,10 @@ class Project(BaseModel):
     unfold_svg_url: Optional[str] = Field(alias="unfoldSvgUrl", default=None)
     unfold_pdf_url: Optional[str] = Field(alias="unfoldPdfUrl", default=None)
     unfold_zip_url: Optional[str] = Field(alias="unfoldZipUrl", default=None)
+    source_prompt: Optional[str] = Field(alias="sourcePrompt", default=None)
+    source_image_url: Optional[str] = Field(alias="sourceImageUrl", default=None)
+    ai_provider: Optional[str] = Field(alias="aiProvider", default=None)
+    enhanced_prompt: Optional[str] = Field(alias="enhancedPrompt", default=None)
     status: ProjectStatus = ProjectStatus.CREATED
     settings: ProjectSettings = Field(default_factory=ProjectSettings)
     stats: Optional[ProcessStats] = None

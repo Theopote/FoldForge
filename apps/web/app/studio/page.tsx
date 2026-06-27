@@ -12,7 +12,7 @@ export default function StudioPage() {
             template.
           </p>
         </div>
-        <Badge variant="secondary">MVP · Upload 3D</Badge>
+        <Badge variant="secondary">Phase 2 · AI Input</Badge>
       </div>
 
       <StudioWorkspace />

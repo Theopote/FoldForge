@@ -3,6 +3,7 @@ import type {
   ProcessStats,
   ProjectSettings,
   ProjectStatus,
+  SourceType,
 } from "@/types";
 
 const STORAGE_KEY = "foldforge:last-project";
@@ -10,8 +11,13 @@ const STORAGE_KEY = "foldforge:last-project";
 export type SavedStudioProject = {
   projectId: string;
   projectName: string;
+  sourceType: SourceType;
   sourceFileName: string | null;
   sourceFileUrl: string | null;
+  sourcePrompt?: string | null;
+  sourceImageUrl?: string | null;
+  aiProvider?: string | null;
+  enhancedPrompt?: string | null;
   processedModelUrl: string | null;
   unfoldSvgUrl: string | null;
   unfoldPdfUrl: string | null;

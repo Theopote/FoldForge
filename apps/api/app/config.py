@@ -26,7 +26,15 @@ class Settings(BaseSettings):
     ]
 
     max_upload_size_mb: int = 50
+    max_image_size_mb: int = 10
     allowed_extensions: set[str] = {".obj", ".stl", ".glb", ".gltf", ".fbx"}
+    allowed_image_extensions: set[str] = {".jpg", ".jpeg", ".png", ".webp"}
+
+    # AI generation (Phase 2)
+    ai_provider: str = "mock"  # mock | replicate
+    replicate_api_token: str | None = None
+    replicate_text_model: str = ""  # Replicate model version hash
+    replicate_image_model: str = ""  # e.g. TripoSR version id
 
 
 settings = Settings()

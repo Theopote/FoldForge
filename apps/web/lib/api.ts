@@ -30,6 +30,17 @@ export type ProcessModelResponse = {
   craftability?: CraftabilityScore;
 };
 
+export type GenerateModelResponse = {
+  projectId: string;
+  sourceType: string;
+  sourceFileUrl: string;
+  sourcePrompt?: string;
+  sourceImageUrl?: string;
+  aiProvider: string;
+  enhancedPrompt?: string;
+  status: string;
+};
+
 export type ApiErrorBody = {
   detail?: string | Array<{ msg?: string; type?: string }>;
 };
@@ -85,4 +96,54 @@ export async function processModel(
   }
 
   return response.json() as Promise<ProcessModelResponse>;
+}
+
+/**
+ * Generate a 3D model from a text prompt (Phase 2).
+ */
+export async function generateFromText(payload: {
+  prompt: string;
+  style: string;
+  name?: string;
+}): Promise<GenerateModelResponse> {
+  const response = await fetch("/api/generate-from-text", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Text generation failed."));
+  }
+
+  return response.json() as Promise<GenerateModelResponse>;
+}
+
+/**
+ * Generate a 3D model from a reference image (Phase 2).
+ */
+export async function generateFromImage(payload: {
+  file: File;
+  style: string;
+  hint?: string;
+  name?: string;
+}): Promise<GenerateModelResponse> {
+  const formData = new FormData();
+  formData.append("file", payload.file);
+  formData.append("style", payload.style);
+  if (payload.hint) formData.append("hint", payload.hint);
+  if (payload.name) formData.append("name", payload.name);
+
+  const response = await fetch("/api/generate-from-image", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Image generation failed."));
+  }
+
+  return response.json() as Promise<GenerateModelResponse>;
 }

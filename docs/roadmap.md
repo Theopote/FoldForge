@@ -1,6 +1,6 @@
 # FoldForge Roadmap
 
-## Phase 1 — MVP (current)
+## Phase 1 — MVP ✅
 
 - [x] Monorepo + Next.js + FastAPI scaffold
 - [x] Homepage + Studio UI
@@ -10,15 +10,15 @@
 - [x] SVG / PDF export
 - [x] End-to-end generate & download
 - [x] Craftability score + warnings
-- [x] ZIP download
-- [x] Project localStorage restore
-- [ ] ZIP download
+- [x] ZIP download + project restore
 
-## Phase 2 — AI Input
+## Phase 2 — AI Input ✅
 
-- Text-to-3D papercraft models
-- Image-to-3D (photos, sketches, game screenshots)
-- Style presets with AI-assisted simplification
+- [x] Text-to-3D API + Studio tab
+- [x] Image-to-3D API + Studio tab
+- [x] Pluggable AI provider layer (mock + Replicate)
+- [x] Papercraft-optimized prompt enhancement
+- [ ] Production TripoSR / Meshy integration tuning
 
 ## Phase 3 — Maker Experience
 

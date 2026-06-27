@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { CraftabilityCard } from "@/features/craftability/craftability-card";
 import { ProcessingLogPanel } from "@/features/export-panel/processing-log-panel";
 import { ModelPreviewPanel } from "@/features/model-preview/model-preview-panel";
-import { ModelUploadPanel } from "@/features/model-upload/model-upload-panel";
+import { CreateSourcePanel } from "@/features/model-upload/create-source-panel";
 import { ProjectSettingsPanel } from "@/features/project-settings/project-settings-panel";
 import { UnfoldPreviewPanel } from "@/features/unfold-preview/unfold-preview-panel";
 import { loadStudioProject } from "@/lib/project-storage";
@@ -31,9 +31,9 @@ export function StudioWorkspace() {
         <aside className="space-y-6 lg:col-span-3">
           <section className="rounded-2xl border border-border/70 bg-card p-4">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Upload
+              Create
             </h2>
-            <ModelUploadPanel />
+            <CreateSourcePanel />
           </section>
           <ProjectSettingsPanel />
           {status === "ready" && (

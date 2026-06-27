@@ -26,8 +26,13 @@ export function ProjectSettingsPanel() {
     updateSettings,
     projectId,
     projectName,
+    sourceType,
     sourceFileName,
     sourceFileUrl,
+    sourcePrompt,
+    sourceImageUrl,
+    aiProvider,
+    enhancedPrompt,
     status,
     setStatus,
     setResults,
@@ -37,7 +42,7 @@ export function ProjectSettingsPanel() {
 
   const handleGenerate = async () => {
     if (!projectId) {
-      setError("Please upload a 3D model first.");
+      setError("Please upload or generate a 3D model first.");
       return;
     }
 
@@ -75,8 +80,13 @@ export function ProjectSettingsPanel() {
       saveStudioProject({
         projectId: projectId!,
         projectName,
+        sourceType,
         sourceFileName,
         sourceFileUrl,
+        sourcePrompt,
+        sourceImageUrl,
+        aiProvider,
+        enhancedPrompt,
         processedModelUrl: data.processedModelUrl ?? null,
         unfoldSvgUrl: data.unfoldSvgUrl ?? null,
         unfoldPdfUrl: data.unfoldPdfUrl ?? null,

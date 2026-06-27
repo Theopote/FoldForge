@@ -19,6 +19,10 @@ class ProjectStore:
         source_file_url: str | None = None,
         settings: ProjectSettings | None = None,
         status: ProjectStatus = ProjectStatus.CREATED,
+        source_prompt: str | None = None,
+        source_image_url: str | None = None,
+        ai_provider: str | None = None,
+        enhanced_prompt: str | None = None,
     ) -> Project:
         """Create and persist a new project."""
         now = datetime.now(timezone.utc)
@@ -29,6 +33,10 @@ class ProjectStore:
             sourceFileUrl=source_file_url,
             status=status,
             settings=settings or ProjectSettings(),
+            sourcePrompt=source_prompt,
+            sourceImageUrl=source_image_url,
+            aiProvider=ai_provider,
+            enhancedPrompt=enhanced_prompt,
             createdAt=now,
             updatedAt=now,
         )

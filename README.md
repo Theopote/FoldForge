@@ -93,6 +93,7 @@ Open:
 | 6 | ✅ Done | End-to-end generate, preview, download |
 | 7 | ✅ Done | Craftability score + warnings UI |
 | 8 | ✅ Done | ZIP export, localStorage, project page |
+| **Phase 2** | ✅ | Text/Image to 3D + AI providers |
 
 ## API Endpoints (MVP)
 
@@ -100,6 +101,9 @@ Open:
 |--------|------|-------------|
 | GET | `/health` | Health check |
 | POST | `/api/upload-model` | Upload OBJ / STL / GLB |
+| POST | `/api/generate-from-text` | AI text → 3D (Phase 2) |
+| POST | `/api/generate-from-image` | AI image → 3D (Phase 2) |
+| GET | `/api/ai/providers` | List AI providers |
 | POST | `/api/process-model` | Process model (stub) |
 | GET | `/api/projects/:id` | Get project |
 | GET | `/api/projects/:id/export/pdf` | Download PDF |

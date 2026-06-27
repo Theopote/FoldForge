@@ -23,7 +23,7 @@ const STEPS = [
   {
     icon: Upload,
     title: "Upload or describe",
-    description: "Start with a 3D model file. Text and image input coming soon.",
+    description: "Upload a 3D file, describe an idea in text, or start from a photo or sketch.",
   },
   {
     icon: Sparkles,
@@ -82,8 +82,9 @@ export default function HomePage() {
               <span className="text-primary">printable paper models</span>
             </h1>
             <p className="mt-4 text-lg text-muted-foreground sm:text-xl">
-              Upload a 3D model and turn it into a printable papercraft kit — with
-              cut lines, fold lines, glue tabs, and part numbers.
+              Upload a 3D model, describe an idea, or start from a photo — then
+              turn it into a printable papercraft kit with cut lines, fold lines,
+              glue tabs, and part numbers.
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               把想象折成立体 · FoldForge / 纸模工坊
