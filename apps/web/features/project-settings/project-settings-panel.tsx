@@ -14,11 +14,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { processModel } from "@/lib/api";
 import { useStudioStore } from "@/store/studio-store";
 
 export function ProjectSettingsPanel() {
-  const { settings, updateSettings, projectId, status, setStatus, addLog, setError } =
-    useStudioStore();
+  const {
+    settings,
+    updateSettings,
+    projectId,
+    status,
+    setStatus,
+    setResults,
+    addLog,
+    setError,
+  } = useStudioStore();
 
   const handleGenerate = async () => {
     if (!projectId) {
@@ -31,20 +40,27 @@ export function ProjectSettingsPanel() {
     addLog("Starting papercraft generation...");
 
     try {
-      const response = await fetch("/api/process-model", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, settings }),
+      const data = await processModel(projectId, settings);
+
+      setResults({
+        processedModelUrl: data.processedModelUrl,
+        unfoldSvgUrl: data.unfoldSvgUrl,
+        unfoldPdfUrl: data.unfoldPdfUrl,
+        stats: data.stats,
+        craftability: data.craftability,
       });
+      setStatus(data.status as typeof status);
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail ?? "Processing request failed.");
+      if (data.stats) {
+        addLog(
+          `Generated ${data.stats.pieces} pieces across ${data.stats.pages} page(s), ${data.stats.faces} faces`,
+        );
       }
-
-      const data = await response.json();
-      setStatus(data.status);
-      addLog(`Processing status: ${data.status}`);
+      if (data.craftability) {
+        addLog(
+          `Craftability: ${data.craftability.score}/100 (${data.craftability.level})`,
+        );
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Generation failed.";

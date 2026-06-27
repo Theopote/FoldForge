@@ -15,6 +15,7 @@ export function ModelPreviewPanel() {
     status,
     meshStats,
     stats,
+    craftability,
     setMeshStats,
     addLog,
     setError,
@@ -56,7 +57,7 @@ export function ModelPreviewPanel() {
         </CardTitle>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">
-            Craftability: —
+            Craftability: {craftability ? `${craftability.score}` : "—"}
           </Badge>
           <Badge variant="secondary">{status}</Badge>
         </div>
@@ -90,17 +91,10 @@ export function ModelPreviewPanel() {
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Metric label="Faces" value={meshStats?.faces ?? stats?.faces ?? "—"} />
+          <Metric label="Faces" value={stats?.faces ?? meshStats?.faces ?? "—"} />
+          <Metric label="Pieces" value={stats?.pieces ?? "—"} />
+          <Metric label="Pages" value={stats?.pages ?? "—"} />
           <Metric label="Vertices" value={meshStats?.vertices ?? "—"} />
-          <Metric label="Edges" value={meshStats?.edges ?? "—"} />
-          <Metric
-            label="Size (mm)"
-            value={
-              meshStats
-                ? `${meshStats.widthMm}×${meshStats.heightMm}×${meshStats.depthMm}`
-                : "—"
-            }
-          />
         </div>
       </CardContent>
     </Card>
