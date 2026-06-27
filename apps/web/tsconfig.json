@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@foldforge/shared": ["../../packages/shared/types/index.ts"]
     }
   },
   "include": [

@@ -15,8 +15,8 @@ export type {
   Style,
   Tab,
   UnfoldPiece,
-} from "../../../packages/shared/types";
+} from "@foldforge/shared";
 
 export {
   DEFAULT_PROJECT_SETTINGS,
-} from "../../../packages/shared/types";
+} from "@foldforge/shared";
