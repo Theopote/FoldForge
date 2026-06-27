@@ -10,7 +10,7 @@ from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
 from app.models.geometry import CutLine, FoldLine, Point2D, Tab, UnfoldPiece
-from app.services.parametrization import abf_refine_uv, lscm_parameterize
+from app.services.parametrization import abf_parameterize, lscm_parameterize
 from app.services.seam_generator import EdgeDihedralData, _edge_key, compute_edge_dihedral_angles
 
 OVERLAP_AREA_THRESHOLD_MM2 = 0.5
@@ -178,7 +178,7 @@ def _unfold_patch_lscm(
     uv = lscm_parameterize(vertices, mesh.faces, patch_vertices)
     if uv is None:
         return None
-    return abf_refine_uv(vertices, mesh.faces, patch_vertices, uv)
+    return abf_parameterize(vertices, mesh.faces, patch_vertices, uv)
 
 
 def _unfold_patch_bfs(

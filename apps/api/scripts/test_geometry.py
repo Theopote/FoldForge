@@ -8,12 +8,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import trimesh
+from shapely.geometry import box
 
 from app.schemas.model import Difficulty, PaperSize
 from app.services.layout_engine import layout_pieces
-from app.services.parametrization import lscm_parameterize
+from app.services.nfp_packing import no_fit_polygon, nfp_placement_candidates
+from app.services.parametrization import abf_parameterize, lscm_parameterize
 from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
-from app.services.tab_generator import add_tabs_to_pieces
+from app.services.tab_generator import TAB_TAPER, add_tabs_to_pieces
 from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
 
 
@@ -30,15 +32,27 @@ def test_signed_dihedral_box() -> None:
     data = compute_edge_dihedral_angles(mesh)
     sharp = [angle for angle in data.unsigned.values() if angle > 0.1]
     assert sharp and all(abs(angle - 1.5708) < 0.01 for angle in sharp)
-    print("signed dihedral box: ok", len(data.signed), "sharp edges", len(sharp))
+    print("signed dihedral box: ok")
 
 
-def test_lscm_box_face() -> None:
+def test_lscm_and_abf() -> None:
     mesh = _box_mesh()
     verts = sorted({int(v) for v in mesh.faces[0]})
     uv = lscm_parameterize(mesh.vertices, mesh.faces, verts)
-    assert uv is not None and len(uv) == len(verts)
-    print("lscm single face: ok")
+    assert uv is not None
+    refined = abf_parameterize(mesh.vertices, mesh.faces, verts, uv)
+    assert len(refined) == len(verts)
+    print("lscm + abf: ok")
+
+
+def test_nfp_candidates() -> None:
+    a = box(0, 0, 40, 30)
+    b = box(0, 0, 25, 20)
+    nfp = no_fit_polygon(a, b)
+    assert not nfp.is_empty
+    candidates = nfp_placement_candidates([a], b)
+    assert len(candidates) > 0
+    print("nfp packing:", len(candidates), "candidates")
 
 
 def test_seam_split_limits() -> None:
@@ -65,14 +79,19 @@ def test_unfold_layout_tabs() -> None:
     assert all(len(p.polygon) >= 3 for p in pieces)
 
     paired = [t for p in pieces for t in p.tabs if t.target_piece_id]
+    trapezoid = [t for p in pieces for t in p.tabs if len(t.polygon) == 4]
+    assert TAB_TAPER < 1.0
+    assert trapezoid, "expected trapezoid tabs"
     print(
-        "unfold/layout/tabs:",
+        "pipeline:",
         len(pieces),
         "pieces",
         len(pages),
         "pages",
         len(paired),
         "paired tabs",
+        len(trapezoid),
+        "trapezoid tabs",
         "warnings:",
         warnings,
     )
@@ -80,7 +99,8 @@ def test_unfold_layout_tabs() -> None:
 
 def main() -> None:
     test_signed_dihedral_box()
-    test_lscm_box_face()
+    test_lscm_and_abf()
+    test_nfp_candidates()
     test_seam_split_limits()
     test_unfold_layout_tabs()
     print("All geometry tests passed.")

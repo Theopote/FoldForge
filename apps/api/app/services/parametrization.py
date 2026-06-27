@@ -1,14 +1,19 @@
-"""LSCM and ABF-lite UV parameterization for mesh patch unfolding."""
+"""LSCM and ABF UV parameterization for mesh patch unfolding."""
 
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
 from app.models.geometry import Point2D
+
+ABF_ANGLE_ITERATIONS = 24
+ABF_POSITION_ITERATIONS = 12
+TWO_PI = 2.0 * math.pi
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:
@@ -146,11 +151,77 @@ def abf_refine_uv(
     *,
     iterations: int = 6,
 ) -> dict[int, Point2D]:
-    """
-    ABF-lite: reduce angle distortion by adjusting interior vertex positions.
+    """Backward-compatible wrapper — delegates to full ABF when iterations > 8."""
+    if iterations > 8:
+        return abf_parameterize(vertices, faces, vertex_indices, uv_map)
+    return _abf_lite_refine(vertices, faces, vertex_indices, uv_map, iterations=iterations)
 
-    Iteratively moves each interior vertex so 2D angle sums approach 3D targets.
+
+def abf_parameterize(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    vertex_indices: list[int],
+    uv_map: dict[int, Point2D],
+) -> dict[int, Point2D]:
     """
+    Sheffer-style ABF: optimize corner angles then re-embed interior vertices.
+
+    Phase 1 — angle adjustment with 2π constraint at interior vertices.
+    Phase 2 — gradient descent on vertex positions to match target angles.
+    """
+    index_set = set(vertex_indices)
+    local_faces = [face for face in faces if all(int(v) in index_set for v in face)]
+    if not local_faces:
+        return uv_map
+
+    corner_3d = _corner_angles_3d(vertices, local_faces)
+    coords = {vi: np.array([uv_map[vi].x, uv_map[vi].y], dtype=np.float64) for vi in vertex_indices}
+    corner_2d = _corner_angles_2d(coords, local_faces)
+
+    interior = _interior_vertices(local_faces, index_set)
+    wedges_by_vertex = _wedges_by_vertex(local_faces, interior)
+
+    # Phase 1 — optimize β angles toward 3D α with 2π sum constraint
+    beta = dict(corner_2d)
+    for _ in range(ABF_ANGLE_ITERATIONS):
+        for vi in interior:
+            keys = wedges_by_vertex.get(vi, [])
+            if len(keys) < 3:
+                continue
+
+            alphas = np.array([corner_3d[k] for k in keys], dtype=np.float64)
+            betas = np.array([beta[k] for k in keys], dtype=np.float64)
+            if float(alphas.sum()) < 1e-8:
+                continue
+
+            target = alphas / float(alphas.sum()) * TWO_PI
+            betas = 0.65 * target + 0.35 * betas
+            betas = betas / float(betas.sum()) * TWO_PI
+
+            for key, value in zip(keys, betas):
+                beta[key] = float(value)
+
+    # Phase 2 — move interior vertices toward target wedge angles
+    for _ in range(ABF_POSITION_ITERATIONS):
+        for vi in interior:
+            keys = wedges_by_vertex.get(vi, [])
+            if len(keys) < 3:
+                continue
+            gradient = _angle_mismatch_gradient(coords, keys, beta)
+            coords[vi] = coords[vi] - 0.35 * gradient
+
+    return {vi: Point2D(float(coords[vi][0]), float(coords[vi][1])) for vi in vertex_indices}
+
+
+def _abf_lite_refine(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    vertex_indices: list[int],
+    uv_map: dict[int, Point2D],
+    *,
+    iterations: int = 6,
+) -> dict[int, Point2D]:
+    """Fast angle-sum scaling fallback."""
     index_set = set(vertex_indices)
     local_faces = [face for face in faces if all(int(v) in index_set for v in face)]
     if not local_faces:
@@ -190,6 +261,99 @@ def abf_refine_uv(
             coords[vi] = centroid + direction * scale * 0.35
 
     return {vi: Point2D(float(coords[vi][0]), float(coords[vi][1])) for vi in vertex_indices}
+
+
+
+def _corner_angles_3d(
+    vertices: np.ndarray,
+    local_faces: list[np.ndarray],
+) -> dict[tuple[tuple[int, int, int], int], float]:
+    angles: dict[tuple[tuple[int, int, int], int], float] = {}
+    for face in local_faces:
+        for vi in face:
+            angle = _angle_at_vertex_3d(vertices, face, int(vi))
+            if angle is not None:
+                angles[(tuple(int(v) for v in face), int(vi))] = angle
+    return angles
+
+
+def _corner_angles_2d(
+    coords: dict[int, np.ndarray],
+    local_faces: list[np.ndarray],
+) -> dict[tuple[tuple[int, int, int], int], float]:
+    angles: dict[tuple[tuple[int, int, int], int], float] = {}
+    for face in local_faces:
+        for vi in face:
+            angle = _angle_at_vertex_2d(coords, face, int(vi))
+            if angle is not None:
+                angles[(tuple(int(v) for v in face), int(vi))] = angle
+    return angles
+
+
+def _interior_vertices(
+    local_faces: list[np.ndarray],
+    patch_vertices: set[int],
+) -> list[int]:
+    return [
+        vi
+        for vi in patch_vertices
+        if not _is_boundary_vertex(vi, local_faces, patch_vertices)
+    ]
+
+
+def _wedges_by_vertex(
+    local_faces: list[np.ndarray],
+    interior: list[int],
+) -> dict[int, list[tuple[tuple[int, int, int], int]]]:
+    wedges: dict[int, list[tuple[tuple[int, int, int], int]]] = defaultdict(list)
+    interior_set = set(interior)
+    for face in local_faces:
+        face_key = tuple(int(v) for v in face)
+        for vi in face:
+            vi_int = int(vi)
+            if vi_int in interior_set:
+                wedges[vi_int].append((face_key, vi_int))
+    return wedges
+
+
+def _angle_mismatch_gradient(
+    coords: dict[int, np.ndarray],
+    wedge_keys: list[tuple[tuple[int, int, int], int]],
+    target_angles: dict[tuple[tuple[int, int, int], int], float],
+) -> np.ndarray:
+    """Finite-difference gradient of squared angle error for one vertex."""
+    if not wedge_keys:
+        return np.zeros(2, dtype=np.float64)
+
+    vi = wedge_keys[0][1]
+    base = _wedge_angle_error(coords, wedge_keys, target_angles)
+    gradient = np.zeros(2, dtype=np.float64)
+    step = 0.25
+
+    for axis in range(2):
+        trial = {k: v.copy() for k, v in coords.items()}
+        trial[vi][axis] += step
+        forward = _wedge_angle_error(trial, wedge_keys, target_angles)
+        gradient[axis] = (forward - base) / step
+
+    return gradient
+
+
+def _wedge_angle_error(
+    coords: dict[int, np.ndarray],
+    wedge_keys: list[tuple[tuple[int, int, int], int]],
+    target_angles: dict[tuple[tuple[int, int, int], int], float],
+) -> float:
+    error = 0.0
+    for face_key, vi in wedge_keys:
+        face = np.array(face_key, dtype=int)
+        current = _angle_at_vertex_2d(coords, face, vi)
+        target = target_angles.get((face_key, vi))
+        if current is None or target is None:
+            continue
+        diff = current - target
+        error += diff * diff / max(target, 1e-6)
+    return error
 
 
 def _is_boundary_vertex(

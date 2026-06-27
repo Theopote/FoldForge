@@ -7,6 +7,7 @@ from shapely.strtree import STRtree
 
 from app.models.geometry import LayoutPage, PlacedPiece, UnfoldPiece
 from app.schemas.model import PaperSize
+from app.services.nfp_packing import nfp_placement_candidates
 from app.services.unfolder import (
     piece_bounds,
     piece_polygon_area,
@@ -134,7 +135,11 @@ def _find_placement_on_page(
         if width > usable_w or height > usable_h:
             continue
 
-        for cx, cy in candidates:
+        trial_poly_norm = piece_to_shapely(normalized, include_tabs=True, gap_buffer=0.0)
+        nfp_candidates = nfp_placement_candidates(placed_polys, trial_poly_norm)
+        rotation_candidates = _candidates_for_piece(candidates, nfp_candidates)
+
+        for cx, cy in rotation_candidates:
             x = cx - min_x
             y = cy - min_y
             trial = translate_piece(normalized, x, y)
@@ -204,6 +209,18 @@ def _candidate_positions(
 
     candidates.sort(key=lambda pos: (pos[1], pos[0]))
     return candidates
+
+
+def _candidates_for_piece(
+    base_candidates: list[tuple[float, float]],
+    nfp_candidates: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    """Merge bottom-left and NFP reference-corner candidates."""
+    merged: set[tuple[float, float]] = set(base_candidates)
+    for x, y in nfp_candidates:
+        merged.add((round(x, 2), round(y, 2)))
+    merged.add((MARGIN_MM, MARGIN_MM))
+    return sorted(merged, key=lambda pos: (pos[1], pos[0]))
 
 
 def _bbox_area(piece: UnfoldPiece) -> float:
