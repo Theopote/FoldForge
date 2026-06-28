@@ -8,7 +8,9 @@ export class ProcessJobCancelledError extends Error {
   }
 }
 
-export function isProcessJobCancelled(error: unknown): boolean {
+export function isProcessJobCancelled(
+  error: unknown,
+): error is ProcessJobCancelledError {
   return error instanceof ProcessJobCancelledError;
 }
 
