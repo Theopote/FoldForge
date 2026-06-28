@@ -30,13 +30,11 @@ def low_poly_bunny_obj() -> None:
 
 
 def simple_house_glb() -> None:
-    base = trimesh.creation.box(extents=(60.0, 50.0, 35.0))
-    base.apply_translation((0.0, 0.0, 17.5))
-    roof = trimesh.creation.box(extents=(64.0, 54.0, 12.0))
-    roof.apply_translation((0.0, 0.0, 41.0))
-    chimney = trimesh.creation.box(extents=(8.0, 8.0, 18.0))
-    chimney.apply_translation((18.0, 12.0, 56.0))
-    house = trimesh.util.concatenate([base, roof, chimney])
+    base = trimesh.creation.box(extents=(50.0, 40.0, 30.0))
+    base.apply_translation((0.0, 0.0, 15.0))
+    roof = trimesh.creation.box(extents=(52.0, 42.0, 10.0))
+    roof.apply_translation((0.0, 0.0, 35.0))
+    house = trimesh.util.concatenate([base, roof])
     house.export(FIXTURES_DIR / "simple_house.glb")
 
 

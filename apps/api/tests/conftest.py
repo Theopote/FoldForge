@@ -122,9 +122,11 @@ def run_pipeline_sync(test_env: Path):
             project_name=project_name,
             settings=settings_obj or ProjectSettings(
                 paperSize=PaperSize.A4,
-                difficulty=Difficulty.STANDARD,
+                difficulty=Difficulty.EASY,
                 style=Style.LOW_POLY,
-                targetHeightMm=120.0,
+                targetHeightMm=80.0,
+                addTabs=True,
+                addNumbers=True,
             ),
             source_original_path=source,
         )
