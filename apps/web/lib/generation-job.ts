@@ -1,5 +1,6 @@
 /** Poll async AI generation jobs until complete or failed. */
 
+import { apiAuthHeaders } from "@/lib/api-auth";
 import { abortableDelay, throwIfAborted } from "@/lib/poll-utils";
 
 export type GenerationJobResponse = {
@@ -41,7 +42,10 @@ export async function pollGenerationJob(
   while (Date.now() - started < timeoutMs) {
     throwIfAborted(signal);
 
-    const response = await fetch(`/api/generation-jobs/${jobId}`, { signal });
+    const response = await fetch(`/api/generation-jobs/${jobId}`, {
+      signal,
+      headers: apiAuthHeaders(),
+    });
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { detail?: string };
       throw new Error(body.detail ?? "Failed to fetch generation job status.");

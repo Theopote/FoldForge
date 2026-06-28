@@ -3,6 +3,8 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 
+import { withStorageAuth } from "@/lib/api-auth";
+
 export type ModelFormat = "glb" | "gltf" | "obj" | "stl";
 
 export function getModelFormat(url: string): ModelFormat | null {
@@ -22,7 +24,8 @@ export function getModelFormat(url: string): ModelFormat | null {
  * Load a 3D model from URL using the appropriate Three.js loader.
  */
 export async function loadModelFromUrl(url: string): Promise<THREE.Object3D> {
-  const format = getModelFormat(url);
+  const authenticatedUrl = withStorageAuth(url);
+  const format = getModelFormat(authenticatedUrl);
   if (!format) {
     throw new Error(`Unsupported model format for URL: ${url}`);
   }
@@ -31,16 +34,16 @@ export async function loadModelFromUrl(url: string): Promise<THREE.Object3D> {
     case "glb":
     case "gltf": {
       const loader = new GLTFLoader();
-      const gltf = await loader.loadAsync(url);
+      const gltf = await loader.loadAsync(authenticatedUrl);
       return gltf.scene;
     }
     case "obj": {
       const loader = new OBJLoader();
-      return loader.loadAsync(url);
+      return loader.loadAsync(authenticatedUrl);
     }
     case "stl": {
       const loader = new STLLoader();
-      const geometry = await loader.loadAsync(url);
+      const geometry = await loader.loadAsync(authenticatedUrl);
       const material = new THREE.MeshStandardMaterial({
         color: "#e85d4c",
         metalness: 0.1,

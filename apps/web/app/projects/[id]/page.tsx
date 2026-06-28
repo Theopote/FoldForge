@@ -8,6 +8,7 @@ import { CraftabilityCard } from "@/features/craftability/craftability-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiAuthHeaders, withStorageAuth } from "@/lib/api-auth";
 import type { CraftabilityScore } from "@/types";
 
 type ProjectDetail = {
@@ -42,7 +43,7 @@ export default function ProjectDetailPage({
     if (!projectId) return;
 
     setLoading(true);
-    fetch(`/api/projects/${projectId}`)
+    fetch(`/api/projects/${projectId}`, { headers: apiAuthHeaders() })
       .then(async (response) => {
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
@@ -104,7 +105,7 @@ export default function ProjectDetailPage({
           <CardContent className="space-y-2">
             {project.unfoldPdfUrl && (
               <Button variant="outline" className="w-full justify-start" asChild>
-                <a href={project.unfoldPdfUrl} download>
+                <a href={withStorageAuth(project.unfoldPdfUrl)} download>
                   <FileText className="mr-2 h-4 w-4" />
                   PDF Template
                 </a>
@@ -112,7 +113,7 @@ export default function ProjectDetailPage({
             )}
             {project.unfoldSvgUrl && (
               <Button variant="outline" className="w-full justify-start" asChild>
-                <a href={project.unfoldSvgUrl} download>
+                <a href={withStorageAuth(project.unfoldSvgUrl)} download>
                   <Download className="mr-2 h-4 w-4" />
                   SVG Template
                 </a>
@@ -120,7 +121,7 @@ export default function ProjectDetailPage({
             )}
             {project.unfoldZipUrl && (
               <Button className="w-full justify-start" asChild>
-                <a href={project.unfoldZipUrl} download>
+                <a href={withStorageAuth(project.unfoldZipUrl)} download>
                   <Download className="mr-2 h-4 w-4" />
                   Full Kit (ZIP)
                 </a>
@@ -145,7 +146,7 @@ export default function ProjectDetailPage({
           <CardContent>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={project.unfoldSvgUrl}
+              src={withStorageAuth(project.unfoldSvgUrl)}
               alt="Unfold"
               className="mx-auto max-h-[480px] w-full object-contain"
             />

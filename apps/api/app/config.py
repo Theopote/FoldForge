@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,19 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+
+    # API authentication — set api_key to protect /api and /storage routes
+    api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOLDFORGE_API_KEY", "API_KEY"),
+    )
+    require_api_auth: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "FOLDFORGE_REQUIRE_API_AUTH",
+            "REQUIRE_API_AUTH",
+        ),
+    )
 
     max_upload_size_mb: int = 50
     max_image_size_mb: int = 10
@@ -58,6 +72,12 @@ class Settings(BaseSettings):
     storage_cleanup_enabled: bool = True
     storage_cleanup_interval_sec: float = 3600.0
     storage_file_ttl_days: int = 30
+
+    @model_validator(mode="after")
+    def validate_auth_settings(self):
+        if self.require_api_auth and not self.api_key:
+            raise ValueError("require_api_auth is enabled but api_key is not configured")
+        return self
 
 
 settings = Settings()

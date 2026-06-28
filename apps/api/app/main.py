@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
+from app.middleware.api_auth import APIKeyMiddleware
 from app.routers import export, generate, health, jobs, process, upload
 from app.services.ai.generation_queue import generation_queue
 from app.services.process_queue import process_queue
@@ -41,6 +42,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(APIKeyMiddleware)
 
 # Serve generated files from storage
 app.mount(

@@ -1,5 +1,6 @@
 /** API response shapes for upload / project endpoints. */
 
+import { apiAuthHeaders } from "@/lib/api-auth";
 import type { GenerationJobResponse } from "@/lib/generation-job";
 import type { ProcessJobResponse } from "@/lib/process-job";
 import { pollProcessJob } from "@/lib/process-job";
@@ -110,7 +111,9 @@ export function parseApiError(body: ApiErrorBody, fallback = "Request failed."):
  * Fetch project metadata from the backend (source of truth).
  */
 export async function getProject(projectId: string): Promise<ProjectDetailResponse> {
-  const response = await fetch(`/api/projects/${projectId}`);
+  const response = await fetch(`/api/projects/${projectId}`, {
+    headers: apiAuthHeaders(),
+  });
 
   if (response.status === 404) {
     throw new ProjectNotFoundError(projectId);
@@ -130,7 +133,9 @@ export async function getProject(projectId: string): Promise<ProjectDetailRespon
 export async function getProjectGenerationJob(
   projectId: string,
 ): Promise<GenerationJobResponse> {
-  const response = await fetch(`/api/projects/${projectId}/generation-job`);
+  const response = await fetch(`/api/projects/${projectId}/generation-job`, {
+    headers: apiAuthHeaders(),
+  });
 
   if (response.status === 404) {
     throw new GenerationJobNotFoundError(projectId);
@@ -150,7 +155,9 @@ export async function getProjectGenerationJob(
 export async function getProjectProcessJob(
   projectId: string,
 ): Promise<ProcessJobResponse> {
-  const response = await fetch(`/api/projects/${projectId}/process-job`);
+  const response = await fetch(`/api/projects/${projectId}/process-job`, {
+    headers: apiAuthHeaders(),
+  });
 
   if (response.status === 404) {
     throw new ProcessJobNotFoundError(projectId);
@@ -173,6 +180,7 @@ export async function uploadModel(file: File): Promise<UploadModelResponse> {
 
   const response = await fetch("/api/upload-model", {
     method: "POST",
+    headers: apiAuthHeaders(),
     body: formData,
   });
 
@@ -194,7 +202,7 @@ export async function startProcessModel(
 ): Promise<ProcessJobResponse> {
   const response = await fetch("/api/process-model", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ projectId, settings }),
     signal: options?.signal,
   });
@@ -213,6 +221,7 @@ export async function startProcessModel(
 export async function cancelProcessJob(jobId: string): Promise<ProcessJobResponse> {
   const response = await fetch(`/api/process-jobs/${jobId}/cancel`, {
     method: "POST",
+    headers: apiAuthHeaders(),
   });
   const body = (await response.json().catch(() => ({}))) as ProcessJobResponse &
     ApiErrorBody;
@@ -270,7 +279,7 @@ export async function generateFromText(payload: {
 }): Promise<GenerateModelResponse> {
   const response = await fetch("/api/generate-from-text", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload),
   });
 
@@ -301,6 +310,7 @@ export async function generateFromImage(payload: {
 
   const response = await fetch("/api/generate-from-image", {
     method: "POST",
+    headers: apiAuthHeaders(),
     body: formData,
   });
 

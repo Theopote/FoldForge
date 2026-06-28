@@ -2,6 +2,7 @@
 
 import type { CraftabilityScore, ProcessStats, ProjectStatus } from "@/types";
 
+import { apiAuthHeaders } from "@/lib/api-auth";
 import { abortableDelay, throwIfAborted } from "@/lib/poll-utils";
 import { ProcessJobCancelledError } from "@/lib/process-errors";
 
@@ -46,7 +47,10 @@ export async function pollProcessJob(
   while (Date.now() - started < timeoutMs) {
     throwIfAborted(signal);
 
-    const response = await fetch(`/api/process-jobs/${jobId}`, { signal });
+    const response = await fetch(`/api/process-jobs/${jobId}`, {
+      signal,
+      headers: apiAuthHeaders(),
+    });
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { detail?: string };
       throw new Error(body.detail ?? "Failed to fetch process job status.");
