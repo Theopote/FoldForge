@@ -90,6 +90,9 @@ export function ProjectSettingsPanel() {
           `Generated ${data.stats.pieces} pieces across ${data.stats.pages} page(s), ${data.stats.faces} faces`,
         );
       }
+      if (settings.colorMode === "color") {
+        addLog("Surface colors baked into SVG and PDF exports.");
+      }
       if (data.craftability) {
         addLog(
           `Craftability: ${data.craftability.score}/100 (${data.craftability.level})`,
@@ -254,6 +257,9 @@ export function ProjectSettingsPanel() {
               Color
             </Badge>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Color mode bakes mesh surface colors into the unfold preview and exports.
+          </p>
         </div>
 
         <Button

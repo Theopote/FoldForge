@@ -35,6 +35,8 @@ Implementation: `app/services/texture_baker.py`
 
 **PDF color fills:** implemented in `pdf_exporter.py` (same triangle layer as SVG, 92% opacity).
 
+**Studio preview:** unfold panel renders the exported SVG (includes baked fills when `colorMode=color`), with storage auth, cache-bust revision, and stale-preview hint when settings change after export.
+
 ## Pipeline hook
 
 When `ProjectSettings.colorMode == "color"`:
@@ -51,10 +53,9 @@ Progress message: `"Baking surface colors"`.
 
 ## Next steps
 
-1. **Preview** — show baked layer in Studio unfold preview
-2. **Raster mode** — optional high-res bake for photo textures (`512px` short edge)
-3. **Material cache** — persist baked triangles on project for re-layout without re-unfold
-4. **Quality** — barycentric UV sampling + mip-aware filtering for large faces
+1. **Raster mode** — optional high-res bake for photo textures (`512px` short edge)
+2. **Material cache** — persist baked triangles on project for re-layout without re-unfold
+3. **Quality** — barycentric UV sampling + mip-aware filtering for large faces
 
 ## Risks
 

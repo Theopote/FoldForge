@@ -8,6 +8,7 @@ import { scheduleProjectSettingsSync } from "@/lib/project-settings-sync";
 import {
   DEFAULT_PROJECT_SETTINGS,
   type CraftabilityScore,
+  type ColorMode,
   type ProcessStats,
   type ProjectSettings,
   type ProjectStatus,
@@ -51,6 +52,8 @@ type StudioState = {
   unfoldSvgUrl: string | null;
   unfoldPdfUrl: string | null;
   unfoldZipUrl: string | null;
+  exportRevision: number;
+  exportedColorMode: ColorMode | null;
   status: ProjectStatus;
   settings: ProjectSettings;
   stats: ProcessStats | null;
@@ -120,6 +123,8 @@ const initialState = {
   unfoldSvgUrl: null,
   unfoldPdfUrl: null,
   unfoldZipUrl: null,
+  exportRevision: 0,
+  exportedColorMode: null,
   status: "created" as ProjectStatus,
   settings: DEFAULT_PROJECT_SETTINGS,
   stats: null,
@@ -141,6 +146,8 @@ function applyGenerationReset() {
     unfoldPdfUrl: null,
     unfoldZipUrl: null,
     processedModelUrl: null,
+    exportRevision: 0,
+    exportedColorMode: null,
     error: null,
   };
 }
@@ -238,7 +245,12 @@ export const useStudioStore = create<StudioState>((set) => ({
       error: null,
     }),
   completePapercraftProcessing: (payload) =>
-    set({ ...payload, activeProcessJobId: null }),
+    set((state) => ({
+      ...payload,
+      activeProcessJobId: null,
+      exportRevision: state.exportRevision + 1,
+      exportedColorMode: state.settings.colorMode,
+    })),
   restoreProject: (saved) =>
     set({
       projectId: saved.projectId,
@@ -260,6 +272,9 @@ export const useStudioStore = create<StudioState>((set) => ({
       settings: saved.settings,
       stats: saved.stats,
       craftability: saved.craftability,
+      exportRevision: saved.unfoldSvgUrl ? 1 : 0,
+      exportedColorMode:
+        saved.status === "ready" ? saved.settings.colorMode : null,
       error: null,
     }),
   addLog: (message) =>

@@ -36,7 +36,7 @@ Existing pieces: `score_seams_by_overlap`, `find_best_split_seam_in_patch`, `unf
 
 **Adopt — elevated priority within Phase 3.**
 
-**Spike complete** — see `docs/spike-texture-baking.md`. When `colorMode=color`, the pipeline bakes vertex colors / GLB textures onto unfold triangles and renders SVG + PDF polygon fills. Studio preview remains line-art only for now.
+**Spike complete** — see `docs/spike-texture-baking.md`. When `colorMode=color`, the pipeline bakes vertex colors / GLB textures onto unfold triangles and renders SVG + PDF polygon fills; Studio unfold preview shows the baked SVG export.
 
 **Remaining for full Phase 3:**
 
