@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -59,7 +60,8 @@ def test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(settings, "database_path", db_path)
 
     test_db = Database(db_path)
-    monkeypatch.setattr("app.db.database.database", test_db)
+    db_module = importlib.import_module("app.db.database")
+    monkeypatch.setattr(db_module, "database", test_db)
     for module in STORE_MODULES:
         monkeypatch.setattr(f"{module}.database", test_db)
 
