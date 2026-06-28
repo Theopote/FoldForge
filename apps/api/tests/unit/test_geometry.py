@@ -165,7 +165,7 @@ def test_unfold_layout_tabs() -> None:
     pieces = unfold_mesh(mesh, patches, dihedral=data)
     pieces = add_tabs_to_pieces(pieces, add_tabs=True, add_numbers=True)
     pieces = [optimize_piece_cut_outline(p) for p in pieces]
-    pages = layout_pieces(pieces, PaperSize.A4)
+    pages = layout_pieces(pieces, PaperSize.A4).pages
     warnings = detect_unfold_overlaps(pieces)
 
     assert len(pieces) >= 1

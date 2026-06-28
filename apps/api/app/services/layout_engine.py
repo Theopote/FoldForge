@@ -31,6 +31,12 @@ PLACEMENT_STEP_MM = 4.0
 
 
 @dataclass
+class LayoutResult:
+    pages: list[LayoutPage]
+    unplaced_pieces: list[UnfoldPiece] = field(default_factory=list)
+
+
+@dataclass
 class LayoutIssueReport:
     has_overlaps: bool = False
     overlap_count: int = 0
@@ -175,7 +181,7 @@ def layout_pieces(
     paper_size: PaperSize,
     *,
     gap_mm: float = DEFAULT_GAP_MM,
-) -> list[LayoutPage]:
+) -> LayoutResult:
     """
     Pack pieces using bottom-left nesting with Shapely collision detection.
 
@@ -197,8 +203,9 @@ def layout_pieces(
         LayoutPage(index=0, width_mm=page_width, height_mm=page_height, placed_pieces=[]),
     ]
 
+    unplaced_pieces: list[UnfoldPiece] = []
     for piece in sorted_pieces:
-        _place_piece_nesting(
+        placed = _place_piece_nesting(
             piece,
             pages,
             usable_box,
@@ -208,13 +215,15 @@ def layout_pieces(
             page_height,
             gap_mm=gap_mm,
         )
+        if not placed:
+            unplaced_pieces.append(piece)
 
     pages = [page for page in pages if page.placed_pieces]
 
     for index, page in enumerate(pages):
         page.index = index
 
-    return pages
+    return LayoutResult(pages=pages, unplaced_pieces=unplaced_pieces)
 
 
 def _place_piece_nesting(
@@ -227,7 +236,7 @@ def _place_piece_nesting(
     page_height: float,
     *,
     gap_mm: float,
-) -> None:
+) -> bool:
     for page in pages:
         placement = _find_placement_on_page(
             piece, page, usable_box, usable_w, usable_h, gap_mm=gap_mm
@@ -238,7 +247,7 @@ def _place_piece_nesting(
             page.placed_pieces.append(
                 PlacedPiece(piece=placed_piece, offset_x=x, offset_y=y, page_index=page.index),
             )
-            return
+            return True
 
     new_page = LayoutPage(
         index=len(pages),
@@ -256,9 +265,10 @@ def _place_piece_nesting(
         new_page.placed_pieces.append(
             PlacedPiece(piece=placed_piece, offset_x=x, offset_y=y, page_index=new_page.index),
         )
-        return
+        return True
 
-    # Printable area too small at uniform scale — skip; layout_with_repair will fail safely.
+    pages.pop()
+    return False
 
 
 def _find_placement_on_page(

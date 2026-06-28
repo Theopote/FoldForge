@@ -7,6 +7,7 @@ from app.schemas.model import PaperSize
 from app.services.layout_engine import (
     MARGIN_MM,
     PAPER_SIZES_MM,
+    LayoutResult,
     find_pieces_too_large_for_paper,
     piece_bounds,
 )
@@ -16,13 +17,13 @@ def layout_pieces_row(
     pieces: list[UnfoldPiece],
     paper_size: PaperSize,
     gap_mm: float = 8.0,
-) -> list[LayoutPage]:
+) -> LayoutResult:
     """Place pieces left-to-right, top-to-bottom without NFP (test helper)."""
     if not pieces:
-        return []
+        return LayoutResult(pages=[])
 
     if find_pieces_too_large_for_paper(pieces, paper_size):
-        return []
+        return LayoutResult(pages=[], unplaced_pieces=list(pieces))
 
     page_w, page_h = PAPER_SIZES_MM[paper_size]
     usable_w = page_w - 2 * MARGIN_MM
@@ -34,6 +35,7 @@ def layout_pieces_row(
     cursor_y = MARGIN_MM
     row_height = 0.0
     placed: list[PlacedPiece] = []
+    unplaced_pieces: list[UnfoldPiece] = []
 
     def flush_page() -> None:
         nonlocal page_index, cursor_x, cursor_y, row_height, placed
@@ -58,6 +60,7 @@ def layout_pieces_row(
         height = max_y - min_y
 
         if width > usable_w or height > usable_h:
+            unplaced_pieces.append(piece)
             continue
 
         if cursor_x + width > MARGIN_MM + usable_w and cursor_x > MARGIN_MM:
@@ -68,6 +71,7 @@ def layout_pieces_row(
         if cursor_y + height > MARGIN_MM + usable_h:
             flush_page()
             if height > usable_h:
+                unplaced_pieces.append(piece)
                 continue
 
         placed.append(
@@ -91,4 +95,4 @@ def layout_pieces_row(
             )
         )
 
-    return pages
+    return LayoutResult(pages=pages, unplaced_pieces=unplaced_pieces)

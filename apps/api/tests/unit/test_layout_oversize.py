@@ -9,6 +9,7 @@ from app.schemas.model import PaperSize
 from app.services.layout_engine import (
     MARGIN_MM,
     PAPER_SIZES_MM,
+    LayoutResult,
     find_pieces_too_large_for_paper,
     layout_pieces,
 )
@@ -37,10 +38,11 @@ def test_oversize_piece_is_not_scaled_or_placed() -> None:
     piece = _oversize_piece(usable_w + 40, usable_h + 20, label="Panel A")
     source_bounds = piece.polygon[2].x, piece.polygon[2].y
 
-    pages = layout_pieces([piece], PaperSize.A4)
-    placed_count = sum(len(page.placed_pieces) for page in pages)
+    result = layout_pieces([piece], PaperSize.A4)
+    placed_count = sum(len(page.placed_pieces) for page in result.pages)
 
     assert placed_count == 0
+    assert len(result.unplaced_pieces) == 1
     assert source_bounds[0] > usable_w
     assert "-scaled" not in piece.id
 
@@ -71,6 +73,27 @@ def test_piece_too_large_on_a4_fails_with_clear_message() -> None:
 
     assert "too large" in str(exc_info.value).lower()
     assert exc_info.value.suggestions
+
+
+def test_layout_with_repair_blocks_unplaced_pieces(monkeypatch: pytest.MonkeyPatch) -> None:
+    piece = _oversize_piece(50, 50, label="Ghost")
+
+    def fake_layout_pieces(
+        pieces: list[UnfoldPiece],
+        paper_size: PaperSize,
+        *,
+        gap_mm: float = 8.0,
+    ) -> LayoutResult:
+        return LayoutResult(pages=[], unplaced_pieces=list(pieces))
+
+    monkeypatch.setattr("app.services.layout_repair.layout_pieces", fake_layout_pieces)
+
+    result = layout_with_repair([piece], PaperSize.A4)
+    assert result.export_blocked is True
+    assert "Ghost" in result.messages[0]
+
+    with pytest.raises(LayoutFitError):
+        ensure_layout_exportable(result)
 
 
 def test_rotated_fit_uses_same_rotation_dims() -> None:

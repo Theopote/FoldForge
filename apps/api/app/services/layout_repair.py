@@ -66,7 +66,25 @@ def layout_with_repair(
     last_issues = detect_layout_issues([])
 
     for attempt, gap_mm in enumerate(GAP_MM_SEQUENCE[:MAX_LAYOUT_REPAIR_ITERATIONS]):
-        pages = layout_pieces(pieces, paper_size, gap_mm=gap_mm)
+        layout = layout_pieces(pieces, paper_size, gap_mm=gap_mm)
+        if layout.unplaced_pieces:
+            labels = [piece.label or piece.id for piece in layout.unplaced_pieces]
+            label_text = ", ".join(labels)
+            return LayoutRepairResult(
+                pages=layout.pages,
+                messages=[
+                    f"Could not place piece(s) {label_text} on the page — "
+                    "layout export blocked."
+                ],
+                export_blocked=True,
+                suggestions=[
+                    "Use a larger paper size (e.g. A3 instead of A4).",
+                    "Reduce target height so all pieces shrink uniformly.",
+                    "Switch to Easy mode to split the model into smaller patches.",
+                ],
+            )
+
+        pages = layout.pages
         issues = detect_layout_issues(pages)
         last_pages = pages
         last_issues = issues
