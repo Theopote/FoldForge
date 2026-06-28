@@ -78,6 +78,12 @@ See [ai.md](./ai.md) for provider configuration (Meshy, TripoSR, async queue).
 GET /api/projects/:id
 ```
 
+```http
+GET /api/projects/:id/generation-job
+```
+
+Returns the latest AI generation job for the project (for resuming async jobs after reload).
+
 ## Export
 
 ```http

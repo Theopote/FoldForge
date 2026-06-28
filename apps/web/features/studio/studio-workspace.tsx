@@ -8,7 +8,7 @@ import { ModelPreviewPanel } from "@/features/model-preview/model-preview-panel"
 import { CreateSourcePanel } from "@/features/model-upload/create-source-panel";
 import { ProjectSettingsPanel } from "@/features/project-settings/project-settings-panel";
 import { UnfoldPreviewPanel } from "@/features/unfold-preview/unfold-preview-panel";
-import { resumeGenerationJob } from "@/features/studio/resume-generation";
+import { resumeGenerationIfNeeded } from "@/features/studio/resume-generation";
 import { ProjectNotFoundError, getProject } from "@/lib/api";
 import {
   clearStudioProject,
@@ -43,9 +43,12 @@ export function StudioWorkspace() {
         saveStudioProject(payload);
         addLog(`Restored project: ${remote.name}`);
 
-        if (payload.status === "processing" && payload.activeJobId) {
-          await resumeGenerationJob(payload.activeJobId);
-        }
+        await resumeGenerationIfNeeded(
+          payload.projectId,
+          payload.status,
+          payload.activeJobId,
+          Boolean(payload.sourceFileUrl),
+        );
       } catch (error) {
         if (cancelled) return;
 
@@ -60,9 +63,12 @@ export function StudioWorkspace() {
           `Restored from local cache (${saved.projectName}); server unavailable.`,
         );
 
-        if (saved.status === "processing" && saved.activeJobId) {
-          await resumeGenerationJob(saved.activeJobId);
-        }
+        await resumeGenerationIfNeeded(
+          saved.projectId,
+          saved.status,
+          saved.activeJobId,
+          Boolean(saved.sourceFileUrl),
+        );
       }
     })();
 

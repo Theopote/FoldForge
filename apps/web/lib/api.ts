@@ -1,5 +1,6 @@
 /** API response shapes for upload / project endpoints. */
 
+import type { GenerationJobResponse } from "@/lib/generation-job";
 import type {
   CraftabilityScore,
   ProcessStats,
@@ -86,6 +87,13 @@ export class ProjectNotFoundError extends Error {
   }
 }
 
+export class GenerationJobNotFoundError extends Error {
+  constructor(projectId: string) {
+    super(`No generation job for project: ${projectId}`);
+    this.name = "GenerationJobNotFoundError";
+  }
+}
+
 /**
  * Parse FastAPI error responses into a user-facing message.
  */
@@ -114,6 +122,26 @@ export async function getProject(projectId: string): Promise<ProjectDetailRespon
   }
 
   return response.json() as Promise<ProjectDetailResponse>;
+}
+
+/**
+ * Fetch the latest AI generation job for a project (resume without localStorage jobId).
+ */
+export async function getProjectGenerationJob(
+  projectId: string,
+): Promise<GenerationJobResponse> {
+  const response = await fetch(`/api/projects/${projectId}/generation-job`);
+
+  if (response.status === 404) {
+    throw new GenerationJobNotFoundError(projectId);
+  }
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Failed to load generation job."));
+  }
+
+  return response.json() as Promise<GenerationJobResponse>;
 }
 
 /**

@@ -12,6 +12,7 @@ from app.schemas.generate import AiProviderInfo, GenerateFromTextRequest, Genera
 from app.schemas.generation_job import GenerationJob, GenerationJobResponse, JobStatus, JobType
 from app.schemas.model import ProjectStatus, SourceType, Style
 from app.services.ai.generation_queue import generation_queue
+from app.services.ai.job_response import build_generation_job_response
 from app.services.ai.job_store import generation_job_store
 from app.services.ai.registry import get_model_provider, list_providers, should_use_async_queue
 from app.services.project_store import project_store
@@ -35,23 +36,7 @@ async def get_generation_job(job_id: str) -> GenerationJobResponse:
     if job is None:
         raise HTTPException(status_code=404, detail="Generation job not found.")
 
-    project = project_store.get(job.project_id)
-    source_file_url = project.source_file_url if project else None
-    source_image_url = project.source_image_url if project else None
-
-    return GenerationJobResponse(
-        jobId=job.id,
-        projectId=job.project_id,
-        status=job.status,
-        provider=job.provider,
-        progress=job.progress,
-        message=job.message,
-        error=job.error,
-        async_mode=True,
-        sourceFileUrl=source_file_url if job.status == JobStatus.COMPLETED else None,
-        sourceImageUrl=source_image_url,
-        enhancedPrompt=job.enhanced_prompt,
-    )
+    return build_generation_job_response(job)
 
 
 @router.post("/generate-from-text", response_model=GenerateModelResponse)

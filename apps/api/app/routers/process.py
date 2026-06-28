@@ -2,9 +2,12 @@
 
 from fastapi import APIRouter, HTTPException
 
+from app.schemas.generation_job import GenerationJobResponse
 from app.schemas.model import ProjectStatus
 from app.schemas.stats import CraftabilityScore, ProcessStats
 from app.schemas.unfold import ProcessModelRequest, ProcessModelResponse
+from app.services.ai.job_response import build_generation_job_response
+from app.services.ai.job_store import generation_job_store
 from app.services.papercraft_pipeline import run_pipeline
 from app.services.project_store import project_store
 from app.utils.file_utils import resolve_storage_path
@@ -105,3 +108,23 @@ async def get_project(project_id: str) -> dict:
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
     return project.model_dump(by_alias=True)
+
+
+@router.get(
+    "/projects/{project_id}/generation-job",
+    response_model=GenerationJobResponse,
+)
+async def get_project_generation_job(project_id: str) -> GenerationJobResponse:
+    """Return the latest AI generation job for a project (for resume after reload)."""
+    project = project_store.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    job = generation_job_store.get_by_project(project_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No generation job found for this project.",
+        )
+
+    return build_generation_job_response(job)
