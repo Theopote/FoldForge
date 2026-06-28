@@ -37,3 +37,13 @@ async def test_upload_rejects_unsupported_format(api_client) -> None:
     )
     assert response.status_code == 400
     assert "Unsupported" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_extension_spoof(api_client) -> None:
+    response = await api_client.post(
+        "/api/upload-model",
+        files={"file": ("model.stl", b"not an stl file", "model/stl")},
+    )
+    assert response.status_code == 400
+    assert "does not match" in response.json()["detail"]

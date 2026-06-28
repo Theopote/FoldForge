@@ -3,12 +3,16 @@
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, UploadFile
 
 from app.config import settings
 from app.schemas.model import ProjectStatus, SourceType, UploadModelResponse
 from app.services.project_store import project_store
-from app.utils.file_utils import build_storage_url, generate_project_id, validate_upload_file
+from app.utils.file_utils import (
+    build_storage_url,
+    generate_project_id,
+    read_and_validate_model_upload,
+)
 
 router = APIRouter()
 
@@ -20,18 +24,10 @@ async def upload_model(file: UploadFile = File(...)) -> UploadModelResponse:
 
     Returns projectId and storage URL for the uploaded source file.
     """
-    extension = validate_upload_file(file)
+    extension, content = await read_and_validate_model_upload(file)
     project_id = generate_project_id()
     filename = f"{project_id}{extension}"
     destination = settings.uploads_dir / filename
-
-    content = await file.read()
-    max_bytes = settings.max_upload_size_mb * 1024 * 1024
-    if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size is {settings.max_upload_size_mb} MB.",
-        )
 
     async with aiofiles.open(destination, "wb") as output:
         await output.write(content)
