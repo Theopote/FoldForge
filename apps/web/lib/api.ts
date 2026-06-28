@@ -17,19 +17,6 @@ export type UploadModelResponse = {
   status: string;
 };
 
-export type ProcessStats = {
-  faces: number;
-  pieces: number;
-  pages: number;
-  difficultyScore: number;
-};
-
-export type CraftabilityScore = {
-  score: number;
-  level: string;
-  warnings: string[];
-};
-
 export type ProcessModelResponse = {
   projectId: string;
   status: ProjectStatus | string;

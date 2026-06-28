@@ -1,4 +1,7 @@
-"""Quick tests for seam / unfold / layout improvements."""
+"""Quick tests for seam / unfold / layout improvements.
+
+Prefer the pytest suite: `python -m pytest` from apps/api.
+"""
 
 from __future__ import annotations
 

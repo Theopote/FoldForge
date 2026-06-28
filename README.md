@@ -148,6 +148,8 @@ Backend tests live under `apps/api/tests/`:
 - **Export** — SVG/PDF/ZIP structure and page sizing
 - **Integration** — upload + async process job via FastAPI
 
+Pipeline snapshot tests patch in a fast row layout (NFP nesting is covered separately in unit tests) so CI stays under a few minutes.
+
 Refresh pipeline snapshots after intentional geometry changes:
 
 ```bash
