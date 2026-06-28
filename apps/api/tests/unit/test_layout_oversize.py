@@ -9,9 +9,12 @@ from app.schemas.model import PaperSize
 from app.services.layout_engine import (
     MARGIN_MM,
     PAPER_SIZES_MM,
+    LayoutPlacementResult,
     LayoutResult,
     find_pieces_too_large_for_paper,
+    layout_has_complete_placement,
     layout_pieces,
+    placed_piece_ids,
 )
 from app.services.layout_repair import ensure_layout_exportable, layout_with_repair
 from app.services.pipeline_errors import LayoutFitError
@@ -67,6 +70,7 @@ def test_piece_too_large_on_a4_fails_with_clear_message() -> None:
     assert result.export_blocked is True
     assert result.oversize_piece_labels == ["A"]
     assert result.scaled_piece_labels == ["A"]
+    assert result.oversize_piece_labels == ["A"]
 
     with pytest.raises(LayoutFitError) as exc_info:
         ensure_layout_exportable(result)
@@ -84,8 +88,8 @@ def test_layout_with_repair_blocks_unplaced_pieces(monkeypatch: pytest.MonkeyPat
         *,
         gap_mm: float = 8.0,
         cancel_check=None,
-    ) -> LayoutResult:
-        return LayoutResult(pages=[], unplaced_pieces=list(pieces))
+    ) -> LayoutPlacementResult:
+        return LayoutPlacementResult(pages=[], unplaced_pieces=list(pieces))
 
     monkeypatch.setattr("app.services.layout_repair.layout_pieces", fake_layout_pieces)
 

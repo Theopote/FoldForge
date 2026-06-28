@@ -7,8 +7,10 @@ from app.schemas.model import PaperSize
 from app.services.layout_engine import (
     MARGIN_MM,
     PAPER_SIZES_MM,
+    LayoutPlacementResult,
     LayoutResult,
     find_pieces_too_large_for_paper,
+    layout_has_complete_placement,
     piece_bounds,
 )
 from app.services.cancel import CancelCheck, check_cancelled
@@ -19,13 +21,13 @@ def layout_pieces_row(
     paper_size: PaperSize,
     gap_mm: float = 8.0,
     cancel_check: CancelCheck | None = None,
-) -> LayoutResult:
+) -> LayoutPlacementResult:
     """Place pieces left-to-right, top-to-bottom without NFP (test helper)."""
     if not pieces:
-        return LayoutResult(pages=[])
+        return LayoutPlacementResult(pages=[])
 
     if find_pieces_too_large_for_paper(pieces, paper_size):
-        return LayoutResult(pages=[], unplaced_pieces=list(pieces))
+        return LayoutPlacementResult(pages=[], unplaced_pieces=list(pieces))
 
     page_w, page_h = PAPER_SIZES_MM[paper_size]
     usable_w = page_w - 2 * MARGIN_MM
@@ -98,4 +100,4 @@ def layout_pieces_row(
             )
         )
 
-    return LayoutResult(pages=pages, unplaced_pieces=unplaced_pieces)
+    return LayoutPlacementResult(pages=pages, unplaced_pieces=unplaced_pieces)

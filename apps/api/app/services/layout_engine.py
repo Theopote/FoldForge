@@ -32,12 +32,6 @@ PLACEMENT_STEP_MM = 4.0
 
 
 @dataclass
-class LayoutResult:
-    pages: list[LayoutPage]
-    unplaced_pieces: list[UnfoldPiece] = field(default_factory=list)
-
-
-@dataclass
 class LayoutIssueReport:
     has_overlaps: bool = False
     overlap_count: int = 0
@@ -46,8 +40,54 @@ class LayoutIssueReport:
 
     @property
     def scaled_piece_labels(self) -> list[str]:
-        """Legacy alias — oversize pieces are never scaled down."""
+        """Deprecated API alias; returns oversize_piece_labels (pieces are never scaled)."""
         return self.oversize_piece_labels
+
+
+@dataclass
+class LayoutPlacementResult:
+    pages: list[LayoutPage]
+    unplaced_pieces: list[UnfoldPiece] = field(default_factory=list)
+    issues: LayoutIssueReport = field(default_factory=LayoutIssueReport)
+
+
+# Backward-compatible alias for internal callers/tests.
+LayoutResult = LayoutPlacementResult
+
+
+LAYOUT_EXPORT_SUGGESTIONS = (
+    "Use a larger paper size (e.g. A3 instead of A4).",
+    "Reduce target height so all pieces shrink uniformly.",
+    "Switch to Easy mode to split the model into smaller patches.",
+)
+
+
+def placed_piece_ids(pages: list[LayoutPage]) -> list[str]:
+    """Return placed piece IDs in page order."""
+    return [
+        placed.piece.id
+        for page in pages
+        for placed in page.placed_pieces
+    ]
+
+
+def find_missing_layout_pieces(
+    input_pieces: list[UnfoldPiece],
+    pages: list[LayoutPage],
+) -> list[UnfoldPiece]:
+    """Input pieces that do not appear on any page."""
+    placed_ids = set(placed_piece_ids(pages))
+    return [piece for piece in input_pieces if piece.id not in placed_ids]
+
+
+def layout_has_complete_placement(
+    input_pieces: list[UnfoldPiece],
+    pages: list[LayoutPage],
+) -> bool:
+    """True when every input piece appears on pages exactly once."""
+    input_ids = sorted(piece.id for piece in input_pieces)
+    output_ids = sorted(placed_piece_ids(pages))
+    return input_ids == output_ids
 
 
 def find_pieces_too_large_for_paper(
@@ -183,7 +223,7 @@ def layout_pieces(
     *,
     gap_mm: float = DEFAULT_GAP_MM,
     cancel_check: CancelCheck | None = None,
-) -> LayoutResult:
+) -> LayoutPlacementResult:
     """
     Pack pieces using bottom-left nesting with Shapely collision detection.
 
@@ -227,7 +267,12 @@ def layout_pieces(
     for index, page in enumerate(pages):
         page.index = index
 
-    return LayoutResult(pages=pages, unplaced_pieces=unplaced_pieces)
+    issues = detect_layout_issues(pages)
+    return LayoutPlacementResult(
+        pages=pages,
+        unplaced_pieces=unplaced_pieces,
+        issues=issues,
+    )
 
 
 def _place_piece_nesting(

@@ -139,15 +139,10 @@ def run_pipeline_sync(test_env: Path):
 @pytest.fixture
 def fast_layout(monkeypatch: pytest.MonkeyPatch):
     """Replace NFP nesting with a deterministic row layout in pipeline tests."""
-    from app.services.layout_engine import LayoutIssueReport
     from tests.helpers.fast_layout import layout_pieces_row
 
     monkeypatch.setattr("app.services.layout_engine.layout_pieces", layout_pieces_row)
     monkeypatch.setattr("app.services.layout_repair.layout_pieces", layout_pieces_row)
-    monkeypatch.setattr(
-        "app.services.layout_repair.detect_layout_issues",
-        lambda _pages: LayoutIssueReport(),
-    )
     yield
 
 

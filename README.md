@@ -100,7 +100,23 @@ Projects and async jobs are persisted in **SQLite** (`storage/foldforge.db`) so 
 
 ## Papercraft layout policy
 
-FoldForge **never scales individual paper pieces** to force them onto a page. All parts stay at the same model scale so glue tabs and edges remain aligned. If a piece is too large for the selected paper, export is blocked and you receive a clear error with suggestions (larger paper, lower target height, Easy mode).
+FoldForge **never scales individual paper pieces** to force them onto a page. All parts stay at the same model scale so glue tabs and edges remain aligned.
+
+Export is blocked when the layout is unsafe:
+
+- **Oversize piece** — rotated bounding box exceeds the printable area for the selected paper.
+- **Unplaced piece** — a part passes size checks but cannot be placed (invalid geometry, packing failure, etc.).
+- **Page overlap** — pieces overlap on the sheet after auto-repair retries.
+
+Errors name the affected piece labels and suggest **A3**, lowering **target height** (uniform model scale), or **Easy mode** to split into smaller patches.
+
+## Job cancellation
+
+Cancel is **best-effort cooperative**: the API marks queued jobs cancelled immediately and sets `cancelRequested` on running jobs. The pipeline checks cancellation at stage boundaries and inside long unfold/layout/NFP loops, then raises `JobCancelledError` as soon as possible.
+
+Cancel on an already **completed**, **failed**, or **cancelled** job returns the current job state (no 409) so the Studio UI can recover cleanly.
+
+Aborting the frontend poll (`AbortSignal`) stops status updates locally; use **Cancel processing** to stop backend work. A cancelled job does not mark the project `ready` or write export URLs.
 
 ## MVP Progress
 
@@ -185,6 +201,9 @@ UPDATE_SNAPSHOTS=1 python -m pytest tests/pipeline/test_pipeline_snapshots.py
 | Upload returns 400 for FBX | FBX not supported in MVP | Convert to OBJ, STL, or GLB |
 | Generate hangs / times out | Long-running unfold or layout | Check `/api/process-jobs/{jobId}`; try **Easy** mode or cancel the job |
 | **Piece too large for paper** | Target height or paper size | Error names the piece and paper, e.g. try **A3** or reduce **target height**; Easy mode splits into smaller parts |
+| **Could not place piece(s)** | Invalid cut outline or packing failure | Piece label appears in the error; try **A3**, lower **target height**, or **Easy mode**; check mesh quality |
+| Cancel clicked but UI stuck on processing | Job finished at the same time as cancel | Reload project or open process job — terminal jobs return current state; completed jobs show results |
+| Cancel does not stop instantly | Heavy stage already running | Cancel is checked between pipeline steps and inside unfold/layout loops; wait a few seconds |
 | Piece scaled / misaligned tabs | Old build or manual edit | Current FoldForge does not per-piece scale; regenerate after changing paper or height |
 | Project 404 after restart | Old localStorage ID | Reload from `/projects/{id}` only if backend DB still has it |
 | Empty PDF / SVG | Process job failed | Open job error message; try a simpler mesh (e.g. `cube.stl`) |

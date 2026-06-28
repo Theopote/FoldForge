@@ -8,8 +8,12 @@ from app.models.geometry import LayoutPage, UnfoldPiece
 from app.schemas.model import PaperSize
 from app.services.cancel import CancelCheck, check_cancelled
 from app.services.layout_engine import (
+    LAYOUT_EXPORT_SUGGESTIONS,
+    LayoutPlacementResult,
     detect_layout_issues,
+    find_missing_layout_pieces,
     find_pieces_too_large_for_paper,
+    layout_has_complete_placement,
     layout_pieces,
 )
 from app.services.pipeline_errors import LayoutFitError, PieceTooLarge
@@ -25,13 +29,43 @@ class LayoutRepairResult:
     has_overlaps: bool = False
     oversize_piece_labels: list[str] = field(default_factory=list)
     oversize_pieces: list[PieceTooLarge] = field(default_factory=list)
+    unplaced_piece_labels: list[str] = field(default_factory=list)
     export_blocked: bool = False
     suggestions: list[str] = field(default_factory=list)
 
     @property
     def scaled_piece_labels(self) -> list[str]:
-        """Legacy alias — pieces are never individually scaled."""
+        """Deprecated API alias; returns oversize_piece_labels (pieces are never scaled)."""
         return self.oversize_piece_labels
+
+
+def _collect_unplaced_pieces(
+    layout: LayoutPlacementResult,
+    input_pieces: list[UnfoldPiece],
+) -> list[UnfoldPiece]:
+    """Merge explicit unplaced pieces with any missing from page output."""
+    unplaced_by_id = {piece.id: piece for piece in layout.unplaced_pieces}
+    for piece in find_missing_layout_pieces(input_pieces, layout.pages):
+        unplaced_by_id.setdefault(piece.id, piece)
+    return list(unplaced_by_id.values())
+
+
+def _unplaced_layout_result(
+    layout: LayoutPlacementResult,
+    input_pieces: list[UnfoldPiece],
+) -> LayoutRepairResult:
+    unplaced = _collect_unplaced_pieces(layout, input_pieces)
+    labels = [piece.label or piece.id for piece in unplaced]
+    label_text = ", ".join(labels)
+    return LayoutRepairResult(
+        pages=layout.pages,
+        messages=[
+            f"Could not place piece(s) {label_text} on the page — layout export blocked."
+        ],
+        unplaced_piece_labels=labels,
+        export_blocked=True,
+        suggestions=list(LAYOUT_EXPORT_SUGGESTIONS),
+    )
 
 
 def layout_with_repair(
@@ -44,7 +78,7 @@ def layout_with_repair(
     """
     Pack pieces onto pages, retrying with wider gaps when overlaps are detected.
 
-    Never scales individual pieces. Oversize or overlapping layouts block export.
+    Never scales individual pieces. Oversize, unplaced, or overlapping layouts block export.
     """
     oversize_pieces = find_pieces_too_large_for_paper(
         pieces,
@@ -70,25 +104,13 @@ def layout_with_repair(
     for attempt, gap_mm in enumerate(GAP_MM_SEQUENCE[:MAX_LAYOUT_REPAIR_ITERATIONS]):
         check_cancelled(cancel_check)
         layout = layout_pieces(pieces, paper_size, gap_mm=gap_mm, cancel_check=cancel_check)
-        if layout.unplaced_pieces:
-            labels = [piece.label or piece.id for piece in layout.unplaced_pieces]
-            label_text = ", ".join(labels)
-            return LayoutRepairResult(
-                pages=layout.pages,
-                messages=[
-                    f"Could not place piece(s) {label_text} on the page — "
-                    "layout export blocked."
-                ],
-                export_blocked=True,
-                suggestions=[
-                    "Use a larger paper size (e.g. A3 instead of A4).",
-                    "Reduce target height so all pieces shrink uniformly.",
-                    "Switch to Easy mode to split the model into smaller patches.",
-                ],
-            )
+
+        unplaced = _collect_unplaced_pieces(layout, pieces)
+        if unplaced or not layout_has_complete_placement(pieces, layout.pages):
+            return _unplaced_layout_result(layout, pieces)
 
         pages = layout.pages
-        issues = detect_layout_issues(pages)
+        issues = layout.issues
         last_pages = pages
         last_issues = issues
 
@@ -119,19 +141,13 @@ def layout_with_repair(
     if detail:
         messages.append(detail)
 
-    suggestions = [
-        "Use a larger paper size (e.g. A3 instead of A4).",
-        "Reduce target height so all pieces shrink uniformly.",
-        "Switch to Easy mode to split the model into smaller patches.",
-    ]
-
     return LayoutRepairResult(
         pages=last_pages,
         messages=messages,
         has_overlaps=last_issues.has_overlaps,
         oversize_piece_labels=last_issues.oversize_piece_labels,
         export_blocked=True,
-        suggestions=suggestions,
+        suggestions=list(LAYOUT_EXPORT_SUGGESTIONS),
     )
 
 
