@@ -9,7 +9,7 @@ import trimesh
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
-from app.models.geometry import CutLine, FoldLine, Point2D, Tab, UnfoldPiece
+from app.models.geometry import BakedTriangle, CutLine, FoldLine, Point2D, Tab, UnfoldPiece
 from app.services.parametrization import abf_parameterize, lscm_parameterize
 from app.services.seam_generator import EdgeDihedralData, _edge_key, compute_edge_dihedral_angles
 
@@ -612,6 +612,15 @@ def translate_piece(piece: UnfoldPiece, dx: float, dy: float) -> UnfoldPiece:
             if piece.cut_outline
             else None
         ),
+        baked_triangles=[
+            BakedTriangle(
+                a=Point2D(t.a.x + dx, t.a.y + dy),
+                b=Point2D(t.b.x + dx, t.b.y + dy),
+                c=Point2D(t.c.x + dx, t.c.y + dy),
+                fill=t.fill,
+            )
+            for t in piece.baked_triangles
+        ],
     )
 
 
@@ -660,6 +669,10 @@ def rotate_piece(piece: UnfoldPiece, quarter_turns: int) -> UnfoldPiece:
             for line in piece.cut_lines
         ],
         cut_outline=([rot(p) for p in piece.cut_outline] if piece.cut_outline else None),
+        baked_triangles=[
+            BakedTriangle(a=rot(t.a), b=rot(t.b), c=rot(t.c), fill=t.fill)
+            for t in piece.baked_triangles
+        ],
     )
 
 

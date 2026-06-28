@@ -5,8 +5,8 @@ from pathlib import Path
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-from app.models.geometry import LayoutPage, PlacedPiece
-from app.schemas.model import ProjectSettings
+from app.models.geometry import BakedTriangle, LayoutPage, PlacedPiece, Point2D
+from app.schemas.model import ColorMode, ProjectSettings
 from app.services.export_annotations import draw_pdf_page_annotations
 
 
@@ -74,6 +74,11 @@ def _draw_piece_pdf(
     settings: ProjectSettings,
 ) -> None:
     piece = placed.piece
+
+    if settings.color_mode == ColorMode.COLOR and piece.baked_triangles:
+        pdf.setDash()
+        for triangle in piece.baked_triangles:
+            _draw_baked_triangle_pdf(pdf, triangle, page_height_mm)
 
     if settings.add_cut_lines:
         pdf.setStrokeColorRGB(0.07, 0.09, 0.15)
@@ -156,3 +161,38 @@ def _draw_piece_pdf(
         pdf.setFillColorRGB(0.91, 0.36, 0.29)
         pdf.setFont("Helvetica-Bold", 12)
         pdf.drawCentredString(cx * mm, _pdf_y(page_height_mm, cy), piece.label)
+
+
+def _draw_baked_triangle_pdf(
+    pdf: canvas.Canvas,
+    triangle: BakedTriangle,
+    page_height_mm: float,
+) -> None:
+    red, green, blue = _hex_to_rgb01(triangle.fill)
+    pdf.setFillColorRGB(red, green, blue)
+    pdf.setFillAlpha(0.92)
+
+    path = pdf.beginPath()
+    for index, point in enumerate((triangle.a, triangle.b, triangle.c)):
+        x = point.x * mm
+        y = _pdf_y(page_height_mm, point.y)
+        if index == 0:
+            path.moveTo(x, y)
+        else:
+            path.lineTo(x, y)
+    path.close()
+    pdf.drawPath(path, stroke=0, fill=1)
+    pdf.setFillAlpha(1.0)
+
+
+def _hex_to_rgb01(hex_color: str) -> tuple[float, float, float]:
+    value = hex_color.strip()
+    if value.startswith("#"):
+        value = value[1:]
+    if len(value) != 6:
+        return 0.71, 0.71, 0.71
+    return (
+        int(value[0:2], 16) / 255.0,
+        int(value[2:4], 16) / 255.0,
+        int(value[4:6], 16) / 255.0,
+    )
