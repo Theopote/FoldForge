@@ -56,6 +56,27 @@ class GenerationJobStore:
             ).fetchall()
         return [GenerationJob.model_validate(json.loads(row["data"])) for row in rows]
 
+    def prepare_for_recovery(
+        self,
+        job_id: str,
+        *,
+        message: str = "Re-queued for recovery",
+    ) -> GenerationJob | None:
+        """Reset an interrupted generation job for worker pickup."""
+        job = self.get(job_id)
+        if job is None:
+            return None
+        if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+            return job
+
+        job.status = JobStatus.QUEUED
+        job.progress = 0
+        job.message = message
+        job.error = None
+        job.updated_at = datetime.now(timezone.utc)
+        self._save(job)
+        return job
+
     def update(
         self,
         job_id: str,

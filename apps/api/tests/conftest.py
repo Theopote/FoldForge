@@ -90,6 +90,8 @@ async def api_client(
     monkeypatch.setattr(main_module, "generation_queue", generation_q)
     monkeypatch.setattr(process_router, "process_queue", process_q)
 
+    await generation_q.recover_pending_jobs()
+    await process_q.recover_pending_jobs()
     await generation_q.start()
     await process_q.start()
 

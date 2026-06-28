@@ -35,6 +35,7 @@ class ProcessQueue:
     def __init__(self) -> None:
         self._queue: asyncio.Queue[str] = asyncio.Queue()
         self._worker_task: asyncio.Task[None] | None = None
+        self._lease_watch_task: asyncio.Task[None] | None = None
         self._worker_id = settings.process_worker_id or _default_worker_id()
         self._lease_sec = settings.process_job_lease_sec
 
@@ -46,34 +47,65 @@ class ProcessQueue:
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._worker_loop())
             logger.info("Process worker started as %s", self._worker_id)
+        if self._lease_watch_task is None or self._lease_watch_task.done():
+            self._lease_watch_task = asyncio.create_task(self._lease_watch_loop())
 
     async def stop(self) -> None:
-        if self._worker_task is None:
-            return
-        self._worker_task.cancel()
-        try:
-            await self._worker_task
-        except asyncio.CancelledError:
-            pass
+        for task in (self._lease_watch_task, self._worker_task):
+            if task is None:
+                continue
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        self._lease_watch_task = None
         self._worker_task = None
 
     async def enqueue(self, job_id: str) -> None:
         await self._queue.put(job_id)
 
     async def recover_pending_jobs(self) -> None:
-        claimable = process_job_store.list_claimable()
-        if not claimable:
+        """Re-queue all incomplete jobs after startup (ignores active leases)."""
+        incomplete = process_job_store.list_incomplete()
+        if not incomplete:
             return
 
-        logger.info("Recovering %d claimable process job(s)", len(claimable))
-        for job in claimable:
-            if job.status == JobStatus.RUNNING:
-                process_job_store.update(
-                    job.id,
-                    status=JobStatus.QUEUED,
-                    message="Re-queued after lease expiry or restart",
-                )
+        logger.info("Recovering %d incomplete process job(s)", len(incomplete))
+        for job in incomplete:
+            prepared = process_job_store.prepare_for_recovery(
+                job.id,
+                message="Re-queued after worker restart",
+            )
+            if prepared is None or prepared.status != JobStatus.QUEUED:
+                continue
             await self.enqueue(job.id)
+
+    async def recover_stale_leases(self) -> None:
+        """Re-queue running jobs whose worker lease expired without a restart."""
+        claimable = process_job_store.list_claimable()
+        stale = [job for job in claimable if job.status == JobStatus.RUNNING]
+        if not stale:
+            return
+
+        logger.info("Recovering %d stale process job lease(s)", len(stale))
+        for job in stale:
+            prepared = process_job_store.prepare_for_recovery(
+                job.id,
+                message="Re-queued after lease expiry",
+            )
+            if prepared is None or prepared.status != JobStatus.QUEUED:
+                continue
+            await self.enqueue(job.id)
+
+    async def _lease_watch_loop(self) -> None:
+        interval = settings.process_job_lease_watch_sec
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await self.recover_stale_leases()
+            except Exception:
+                logger.exception("Process lease watch failed")
 
     async def _worker_loop(self) -> None:
         while True:
@@ -97,7 +129,7 @@ class ProcessQueue:
         job = process_job_store.get(job_id)
         if job is None:
             return
-        if job.status == JobStatus.CANCELLED:
+        if job.status in (JobStatus.CANCELLED, JobStatus.COMPLETED, JobStatus.FAILED):
             return
 
         job = process_job_store.try_acquire_lock(

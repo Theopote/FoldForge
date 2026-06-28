@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     # Papercraft job worker identity and lease (multi-instance prep)
     process_worker_id: str | None = None
     process_job_lease_sec: int = 600
+    process_job_lease_watch_sec: float = 60.0
 
     # Papercraft quality — strict (default) vs warning overlap policy; see unfold_repair
     block_export_on_unfold_overlap: bool = True

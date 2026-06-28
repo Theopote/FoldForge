@@ -47,14 +47,14 @@ class GenerationQueue:
         if not pending:
             return
 
-        logger.info("Recovering %d pending generation job(s)", len(pending))
+        logger.info("Recovering %d incomplete generation job(s)", len(pending))
         for job in pending:
-            if job.status == JobStatus.RUNNING:
-                generation_job_store.update(
-                    job.id,
-                    status=JobStatus.QUEUED,
-                    message="Re-queued after server restart",
-                )
+            prepared = generation_job_store.prepare_for_recovery(
+                job.id,
+                message="Re-queued after worker restart",
+            )
+            if prepared is None or prepared.status != JobStatus.QUEUED:
+                continue
             await self.enqueue(job.id)
 
     async def _worker_loop(self) -> None:
@@ -76,6 +76,8 @@ class GenerationQueue:
     async def _process_job(self, job_id: str) -> None:
         job = generation_job_store.get(job_id)
         if job is None:
+            return
+        if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
             return
 
         generation_job_store.update(

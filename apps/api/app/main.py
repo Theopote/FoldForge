@@ -17,10 +17,10 @@ from app.services.storage_cleanup import storage_cleanup_task
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background workers on startup."""
-    await generation_queue.start()
-    await process_queue.start()
     await generation_queue.recover_pending_jobs()
     await process_queue.recover_pending_jobs()
+    await generation_queue.start()
+    await process_queue.start()
     await storage_cleanup_task.start()
     yield
     await storage_cleanup_task.stop()

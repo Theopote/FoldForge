@@ -68,6 +68,32 @@ class ProcessJobStore:
             ).fetchall()
         return [ProcessJob.model_validate(json.loads(row["data"])) for row in rows]
 
+    def prepare_for_recovery(
+        self,
+        job_id: str,
+        *,
+        message: str = "Re-queued for recovery",
+    ) -> ProcessJob | None:
+        """Clear stale locks and return a queued job for worker pickup."""
+        with database.connection() as conn:
+            job = self._load(conn, job_id)
+            if job is None:
+                return None
+            if job.status in (
+                JobStatus.COMPLETED,
+                JobStatus.FAILED,
+                JobStatus.CANCELLED,
+            ):
+                return job
+
+            job.status = JobStatus.QUEUED
+            job.locked_by = None
+            job.locked_until = None
+            job.message = message
+            job.updated_at = datetime.now(timezone.utc)
+            self._persist(conn, job)
+            return job
+
     def count_queued(self) -> int:
         """Count jobs waiting for a worker (queued with no active lease)."""
         now = _utc_now_iso()
