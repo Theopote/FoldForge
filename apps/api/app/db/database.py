@@ -33,6 +33,22 @@ CREATE INDEX IF NOT EXISTS idx_generation_jobs_project_id
 
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_status
     ON generation_jobs(status);
+
+CREATE TABLE IF NOT EXISTS process_jobs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_process_jobs_project_id
+    ON process_jobs(project_id);
+
+CREATE INDEX IF NOT EXISTS idx_process_jobs_status
+    ON process_jobs(status);
 """
 
 

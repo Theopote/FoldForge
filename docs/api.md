@@ -40,9 +40,31 @@ Response:
 ```http
 POST /api/process-model
 Content-Type: application/json
+
+{ "projectId": "...", "settings": { ... } }
 ```
 
-Request body matches `ProjectSettings` + `projectId`. Full pipeline implemented in Step 5.
+Returns **202 Accepted** with `jobId`. Poll:
+
+```http
+GET /api/process-jobs/{jobId}
+```
+
+Or use the unified poller:
+
+```http
+GET /api/jobs/{jobId}
+```
+
+Progress fields: `progress` (0–100), `message`. When `status` is `completed`, result URLs and craftability are included.
+
+```http
+GET /api/projects/:id/process-job
+```
+
+Returns the latest process job for resume after reload.
+
+Request body matches `ProjectSettings` + `projectId`. Full pipeline runs in a background worker.
 
 ## AI Generate (Phase 2)
 

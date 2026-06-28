@@ -1,6 +1,8 @@
 /** API response shapes for upload / project endpoints. */
 
 import type { GenerationJobResponse } from "@/lib/generation-job";
+import type { ProcessJobResponse } from "@/lib/process-job";
+import { pollProcessJob } from "@/lib/process-job";
 import type {
   CraftabilityScore,
   ProcessStats,
@@ -30,7 +32,11 @@ export type CraftabilityScore = {
 
 export type ProcessModelResponse = {
   projectId: string;
-  status: string;
+  status: ProjectStatus | string;
+  jobId?: string;
+  async?: boolean;
+  progress?: number;
+  message?: string;
   processedModelUrl?: string;
   unfoldSvgUrl?: string;
   unfoldPdfUrl?: string;
@@ -94,6 +100,13 @@ export class GenerationJobNotFoundError extends Error {
   }
 }
 
+export class ProcessJobNotFoundError extends Error {
+  constructor(projectId: string) {
+    super(`No process job for project: ${projectId}`);
+    this.name = "ProcessJobNotFoundError";
+  }
+}
+
 /**
  * Parse FastAPI error responses into a user-facing message.
  */
@@ -145,6 +158,26 @@ export async function getProjectGenerationJob(
 }
 
 /**
+ * Fetch the latest papercraft process job for a project (resume after reload).
+ */
+export async function getProjectProcessJob(
+  projectId: string,
+): Promise<ProcessJobResponse> {
+  const response = await fetch(`/api/projects/${projectId}/process-job`);
+
+  if (response.status === 404) {
+    throw new ProcessJobNotFoundError(projectId);
+  }
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Failed to load process job."));
+  }
+
+  return response.json() as Promise<ProcessJobResponse>;
+}
+
+/**
  * Upload a 3D model file to the backend.
  */
 export async function uploadModel(file: File): Promise<UploadModelResponse> {
@@ -165,24 +198,57 @@ export async function uploadModel(file: File): Promise<UploadModelResponse> {
 }
 
 /**
- * Run the papercraft generation pipeline for a project.
+ * Queue papercraft processing and return the async job handle (202 Accepted).
  */
-export async function processModel(
+export async function startProcessModel(
   projectId: string,
   settings: Record<string, unknown>,
-): Promise<ProcessModelResponse> {
+): Promise<ProcessJobResponse> {
   const response = await fetch("/api/process-model", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ projectId, settings }),
   });
 
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+  const body = (await response.json().catch(() => ({}))) as ProcessJobResponse &
+    ApiErrorBody;
+
+  if (response.status !== 202 && !response.ok) {
     throw new Error(parseApiError(body, "Processing failed."));
   }
 
-  return response.json() as Promise<ProcessModelResponse>;
+  return body;
+}
+
+/**
+ * Run the papercraft generation pipeline for a project (async queue + poll).
+ */
+export async function processModel(
+  projectId: string,
+  settings: Record<string, unknown>,
+  options?: {
+    onProgress?: (job: ProcessJobResponse) => void;
+  },
+): Promise<ProcessModelResponse> {
+  const accepted = await startProcessModel(projectId, settings);
+  const job = await pollProcessJob(accepted.jobId, {
+    onProgress: options?.onProgress,
+  });
+
+  return {
+    projectId: job.projectId,
+    status: job.resultStatus ?? "ready",
+    processedModelUrl: job.processedModelUrl,
+    unfoldSvgUrl: job.unfoldSvgUrl,
+    unfoldPdfUrl: job.unfoldPdfUrl,
+    unfoldZipUrl: job.unfoldZipUrl,
+    stats: job.stats,
+    craftability: job.craftability,
+    jobId: job.jobId,
+    async: true,
+    progress: job.progress,
+    message: job.message,
+  };
 }
 
 /**

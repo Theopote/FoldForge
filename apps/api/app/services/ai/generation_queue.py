@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from app.schemas.generation_job import JobStatus, JobType
+from app.schemas.generation_job import JobType
+from app.schemas.job import JobStatus
 from app.schemas.model import ProjectStatus
 from app.services.ai.job_store import generation_job_store
 from app.services.ai.registry import get_provider_by_name

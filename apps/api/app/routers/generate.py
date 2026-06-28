@@ -9,7 +9,8 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.schemas.generate import AiProviderInfo, GenerateFromTextRequest, GenerateModelResponse
-from app.schemas.generation_job import GenerationJob, GenerationJobResponse, JobStatus, JobType
+from app.schemas.generation_job import GenerationJob, GenerationJobResponse, JobType
+from app.schemas.job import JobStatus
 from app.schemas.model import ProjectStatus, SourceType, Style
 from app.services.ai.generation_queue import generation_queue
 from app.services.ai.job_response import build_generation_job_response

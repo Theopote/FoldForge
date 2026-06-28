@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +30,11 @@ export function ProjectSettingsPanel() {
     setResults,
     addLog,
     setError,
+    setActiveProcessJobId,
   } = useStudioStore();
+
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState("");
 
   const handleGenerate = async () => {
     if (!projectId) {
@@ -39,11 +44,20 @@ export function ProjectSettingsPanel() {
 
     setError(null);
     setStatus("processing");
+    setProgress(0);
+    setProgressMessage("Queued");
     addLog("Starting papercraft generation...");
 
     try {
-      const data = await processModel(projectId, settings);
+      const data = await processModel(projectId, settings, {
+        onProgress: (job) => {
+          setProgress(job.progress);
+          setProgressMessage(job.message);
+          setActiveProcessJobId(job.jobId);
+        },
+      });
 
+      setActiveProcessJobId(null);
       setResults({
         processedModelUrl: data.processedModelUrl,
         unfoldSvgUrl: data.unfoldSvgUrl,
@@ -72,7 +86,11 @@ export function ProjectSettingsPanel() {
         error instanceof Error ? error.message : "Generation failed.";
       setError(message);
       setStatus("failed");
+      setActiveProcessJobId(null);
       addLog(`Error: ${message}`);
+    } finally {
+      setProgress(0);
+      setProgressMessage("");
     }
   };
 
@@ -207,8 +225,18 @@ export function ProjectSettingsPanel() {
           disabled={!projectId || status === "processing"}
           onClick={() => void handleGenerate()}
         >
-          {status === "processing" ? "Generating..." : "Generate Template"}
+          {status === "processing"
+            ? progress > 0
+              ? `Generating… ${progress}%`
+              : "Generating..."
+            : "Generate Template"}
         </Button>
+
+        {status === "processing" && progressMessage && (
+          <p className="text-center text-xs text-muted-foreground">
+            {progressMessage}
+          </p>
+        )}
 
         {status === "ready" && projectId && (
           <Button variant="outline" className="w-full" asChild>

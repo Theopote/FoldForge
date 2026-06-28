@@ -47,6 +47,7 @@ type StudioState = {
   aiProvider: string | null;
   enhancedPrompt: string | null;
   activeJobId: string | null;
+  activeProcessJobId: string | null;
   processedModelUrl: string | null;
   unfoldSvgUrl: string | null;
   unfoldPdfUrl: string | null;
@@ -67,6 +68,7 @@ type StudioState = {
   setGenerationResult: (payload: GenerationPayload) => void;
   setAsyncGenerationPending: (payload: AsyncGenerationPayload) => void;
   setActiveJobId: (jobId: string | null) => void;
+  setActiveProcessJobId: (jobId: string | null) => void;
   setStatus: (status: ProjectStatus) => void;
   updateSettings: (partial: Partial<ProjectSettings>) => void;
   setMeshStats: (stats: ModelMeshStats | null) => void;
@@ -95,6 +97,7 @@ const initialState = {
   aiProvider: null,
   enhancedPrompt: null,
   activeJobId: null,
+  activeProcessJobId: null,
   processedModelUrl: null,
   unfoldSvgUrl: null,
   unfoldPdfUrl: null,
@@ -142,6 +145,7 @@ export const useStudioStore = create<StudioState>((set) => ({
         aiProvider: null,
         enhancedPrompt: null,
         activeJobId: null,
+        activeProcessJobId: null,
         status: "uploaded",
         ...applyGenerationReset(),
       };
@@ -157,6 +161,7 @@ export const useStudioStore = create<StudioState>((set) => ({
         aiProvider: null,
         enhancedPrompt: null,
         activeJobId: null,
+        activeProcessJobId: null,
         status: "uploaded" as ProjectStatus,
         ...applyGenerationReset(),
       };
@@ -175,6 +180,7 @@ export const useStudioStore = create<StudioState>((set) => ({
         aiProvider: payload.aiProvider ?? null,
         enhancedPrompt: payload.enhancedPrompt ?? null,
         activeJobId: null,
+        activeProcessJobId: null,
         status: "uploaded",
         ...applyGenerationReset(),
       };
@@ -190,6 +196,7 @@ export const useStudioStore = create<StudioState>((set) => ({
         aiProvider: payload.aiProvider ?? null,
         enhancedPrompt: payload.enhancedPrompt ?? null,
         activeJobId: null,
+        activeProcessJobId: null,
         status: "uploaded" as ProjectStatus,
         ...applyGenerationReset(),
       };
@@ -206,6 +213,7 @@ export const useStudioStore = create<StudioState>((set) => ({
         aiProvider: payload.aiProvider ?? null,
         enhancedPrompt: null,
         activeJobId: payload.jobId,
+        activeProcessJobId: null,
         sourceFileUrl: null,
         sourceFileName: null,
         status: "processing",
@@ -221,6 +229,7 @@ export const useStudioStore = create<StudioState>((set) => ({
         aiProvider: payload.aiProvider ?? null,
         enhancedPrompt: null,
         activeJobId: payload.jobId,
+        activeProcessJobId: null,
         sourceFileUrl: null,
         sourceFileName: null,
         status: "processing" as ProjectStatus,
@@ -232,6 +241,12 @@ export const useStudioStore = create<StudioState>((set) => ({
       const next: StudioState = { ...state, activeJobId };
       persistState(next);
       return { activeJobId };
+    }),
+  setActiveProcessJobId: (activeProcessJobId) =>
+    set((state) => {
+      const next: StudioState = { ...state, activeProcessJobId };
+      persistState(next);
+      return { activeProcessJobId };
     }),
   setStatus: (status) =>
     set((state) => {
@@ -265,6 +280,7 @@ export const useStudioStore = create<StudioState>((set) => ({
       aiProvider: saved.aiProvider ?? null,
       enhancedPrompt: saved.enhancedPrompt ?? null,
       activeJobId: saved.activeJobId ?? null,
+      activeProcessJobId: saved.activeProcessJobId ?? null,
       processedModelUrl: saved.processedModelUrl,
       unfoldSvgUrl: saved.unfoldSvgUrl,
       unfoldPdfUrl: saved.unfoldPdfUrl,

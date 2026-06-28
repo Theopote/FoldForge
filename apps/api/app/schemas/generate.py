@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from app.schemas.generation_job import JobStatus
+from app.schemas.job import JobStatus
 from app.schemas.model import ProjectStatus, SourceType, Style
 
 

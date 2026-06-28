@@ -2,18 +2,11 @@
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.job import JobStatus
 from app.schemas.model import Style
-
-
-class JobStatus(str, Enum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 class JobType(str, Enum):

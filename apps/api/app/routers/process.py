@@ -1,29 +1,35 @@
 """Model processing router."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 from app.schemas.generation_job import GenerationJobResponse
+from app.schemas.job import JobStatus
 from app.schemas.model import ProjectStatus
-from app.schemas.stats import CraftabilityScore, ProcessStats
-from app.schemas.unfold import ProcessModelRequest, ProcessModelResponse
+from app.schemas.process_job import ProcessJob, ProcessJobResponse
+from app.schemas.unfold import ProcessModelRequest
 from app.services.ai.job_response import build_generation_job_response
 from app.services.ai.job_store import generation_job_store
-from app.services.papercraft_pipeline import run_pipeline
-from app.services.pipeline_errors import UnfoldRepairError
+from app.services.process_job_response import build_process_job_response
+from app.services.process_job_store import process_job_store
+from app.services.process_queue import process_queue
 from app.services.project_store import project_store
-from app.utils.file_utils import resolve_storage_path
+from app.utils.file_utils import generate_project_id, resolve_storage_path
 from app.utils.logging_utils import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 
-@router.post("/process-model", response_model=ProcessModelResponse)
-async def process_model(request: ProcessModelRequest) -> ProcessModelResponse:
+@router.post("/process-model", response_model=ProcessJobResponse)
+async def process_model(request: ProcessModelRequest):
     """
-    Process an uploaded model into a printable unfold template.
+    Queue papercraft pipeline processing for a project.
 
-    Runs the full geometry pipeline synchronously (MVP).
+    Returns 202 Accepted with jobId — poll GET /api/process-jobs/{jobId}
+    or GET /api/jobs/{jobId} for progress and results.
     """
     project = project_store.get(request.project_id)
     if project is None:
@@ -32,82 +38,46 @@ async def process_model(request: ProcessModelRequest) -> ProcessModelResponse:
     if not project.source_file_url:
         raise HTTPException(status_code=400, detail="Project has no uploaded model.")
 
+    source_path = resolve_storage_path(project.source_file_url)
+    if not source_path.exists():
+        raise HTTPException(status_code=404, detail="Source model file not found.")
+
+    existing = process_job_store.get_by_project(request.project_id)
+    if existing and existing.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+        body = build_process_job_response(existing)
+        return JSONResponse(status_code=202, content=body.model_dump(by_alias=True))
+
+    now = datetime.now(timezone.utc)
+    job_id = generate_project_id()
+    job = ProcessJob(
+        id=job_id,
+        projectId=request.project_id,
+        settings=request.settings,
+        projectName=project.name,
+        sourcePath=str(source_path.resolve()),
+        createdAt=now,
+        updatedAt=now,
+    )
+    process_job_store.create(job)
+
     project.status = ProjectStatus.PROCESSING
     project.settings = request.settings
     project_store.update(project)
 
-    try:
-        source_path = resolve_storage_path(project.source_file_url)
-        if not source_path.exists():
-            raise HTTPException(status_code=404, detail="Source model file not found.")
+    await process_queue.enqueue(job_id)
+    logger.info("Queued process job %s for project %s", job_id, project.id)
 
-        logger.info("Processing project %s from %s", project.id, source_path)
+    body = build_process_job_response(job)
+    return JSONResponse(status_code=202, content=body.model_dump(by_alias=True))
 
-        result = run_pipeline(
-            project_id=project.id,
-            source_path=source_path,
-            project_name=project.name,
-            settings=request.settings,
-            source_original_path=source_path,
-        )
 
-        project.status = ProjectStatus.READY
-        project.processed_model_url = result.processed_mesh_path
-        project.unfold_svg_url = result.svg_path
-        project.unfold_pdf_url = result.pdf_path
-        project.unfold_zip_url = result.zip_path
-        project.settings = request.settings
-        project.stats = ProcessStats(
-            faces=result.face_count,
-            pieces=len(result.pieces),
-            pages=len(result.pages),
-            difficultyScore=result.difficulty_score,
-        )
-        project.craftability = CraftabilityScore(
-            score=result.craftability_score,
-            level=result.craftability_level,
-            warnings=result.warnings,
-        )
-        project_store.update(project)
-
-        return ProcessModelResponse(
-            projectId=project.id,
-            status=ProjectStatus.READY,
-            processedModelUrl=result.processed_mesh_path,
-            unfoldSvgUrl=result.svg_path,
-            unfoldPdfUrl=result.pdf_path,
-            unfoldZipUrl=result.zip_path,
-            stats=ProcessStats(
-                faces=result.face_count,
-                pieces=len(result.pieces),
-                pages=len(result.pages),
-                difficultyScore=result.difficulty_score,
-            ),
-            craftability=CraftabilityScore(
-                score=result.craftability_score,
-                level=result.craftability_level,
-                warnings=result.warnings,
-            ),
-        )
-
-    except HTTPException:
-        raise
-    except UnfoldRepairError as exc:
-        logger.warning("Unfold repair failed for project %s: %s", project.id, exc)
-        project.status = ProjectStatus.FAILED
-        project_store.update(project)
-        raise HTTPException(
-            status_code=422,
-            detail=str(exc),
-        ) from exc
-    except Exception as exc:
-        logger.exception("Processing failed for project %s", project.id)
-        project.status = ProjectStatus.FAILED
-        project_store.update(project)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Processing failed: {exc}",
-        ) from exc
+@router.get("/process-jobs/{job_id}", response_model=ProcessJobResponse)
+async def get_process_job(job_id: str) -> ProcessJobResponse:
+    """Poll async papercraft processing job status and results."""
+    job = process_job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Process job not found.")
+    return build_process_job_response(job)
 
 
 @router.get("/projects/{project_id}")
@@ -137,3 +107,23 @@ async def get_project_generation_job(project_id: str) -> GenerationJobResponse:
         )
 
     return build_generation_job_response(job)
+
+
+@router.get(
+    "/projects/{project_id}/process-job",
+    response_model=ProcessJobResponse,
+)
+async def get_project_process_job(project_id: str) -> ProcessJobResponse:
+    """Return the latest papercraft process job for a project (for resume after reload)."""
+    project = project_store.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    job = process_job_store.get_by_project(project_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No process job found for this project.",
+        )
+
+    return build_process_job_response(job)

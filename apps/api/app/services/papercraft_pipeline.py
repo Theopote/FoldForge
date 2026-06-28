@@ -1,5 +1,6 @@
 """Orchestrate the full papercraft generation pipeline."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from app.config import settings as app_settings
@@ -19,6 +20,8 @@ from app.services.unfold_repair import collect_unfold_warnings, unfold_with_auto
 from app.services.zip_exporter import export_zip
 from app.utils.file_utils import build_storage_url
 
+ProgressCallback = Callable[[int, str], None]
+
 
 def run_pipeline(
     project_id: str,
@@ -26,23 +29,33 @@ def run_pipeline(
     project_name: str,
     settings: ProjectSettings,
     source_original_path: Path | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> PipelineResult:
     """
     Execute load → clean → simplify → seam → unfold → tabs → layout → export.
 
     Writes processed mesh, SVG, and PDF to storage and returns metadata.
     """
+    def report(progress: int, message: str) -> None:
+        if on_progress is not None:
+            on_progress(progress, message)
+
+    report(5, "Loading model")
     mesh = load_mesh(source_path)
     quality_warnings = mesh_quality_issues(mesh)
 
+    report(15, "Cleaning and simplifying mesh")
     mesh = clean_mesh(mesh)
     mesh = scale_to_target_height(mesh, settings.target_height_mm)
     mesh = simplify_mesh(mesh, settings.difficulty, settings.style)
 
+    report(35, "Unfolding patches")
     dihedral = compute_edge_dihedral_angles(mesh)
     unfold_result = unfold_with_auto_repair(mesh, settings.difficulty, dihedral=dihedral)
     pieces = unfold_result.pieces
     unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
+
+    report(55, "Adding tabs and cut lines")
     pieces = add_tabs_to_pieces(
         pieces,
         add_tabs=settings.add_tabs,
@@ -51,10 +64,12 @@ def run_pipeline(
     if settings.add_tabs:
         pieces = optimize_pieces_cut_outlines(pieces)
 
+    report(70, "Laying out pages")
     layout_result = layout_with_repair(pieces, settings.paper_size)
     pages = layout_result.pages
     layout_warnings = collect_layout_warnings(layout_result)
 
+    report(85, "Exporting templates")
     processed_path = app_settings.processed_dir / f"{project_id}.glb"
     mesh.export(processed_path)
 
@@ -98,6 +113,8 @@ def run_pipeline(
     )
 
     difficulty_score = _difficulty_score(len(mesh.faces), len(pieces), len(pages))
+
+    report(100, "Complete")
 
     return PipelineResult(
         processed_mesh_path=build_storage_url(Path("processed") / processed_path.name),

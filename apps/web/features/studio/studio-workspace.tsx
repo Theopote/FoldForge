@@ -9,6 +9,7 @@ import { CreateSourcePanel } from "@/features/model-upload/create-source-panel";
 import { ProjectSettingsPanel } from "@/features/project-settings/project-settings-panel";
 import { UnfoldPreviewPanel } from "@/features/unfold-preview/unfold-preview-panel";
 import { resumeGenerationIfNeeded } from "@/features/studio/resume-generation";
+import { resumeProcessIfNeeded } from "@/features/studio/resume-process";
 import { ProjectNotFoundError, getProject } from "@/lib/api";
 import {
   clearStudioProject,
@@ -38,16 +39,24 @@ export function StudioWorkspace() {
         const payload = projectDetailToSavedStudio(remote, {
           sourceFileName: saved.sourceFileName,
           activeJobId: saved.activeJobId,
+          activeProcessJobId: saved.activeProcessJobId,
         });
         restoreProject({ ...payload, savedAt: saved.savedAt });
         saveStudioProject(payload);
         addLog(`Restored project: ${remote.name}`);
 
+        const hasSource = Boolean(payload.sourceFileUrl);
         await resumeGenerationIfNeeded(
           payload.projectId,
           payload.status,
           payload.activeJobId,
-          Boolean(payload.sourceFileUrl),
+          hasSource,
+        );
+        await resumeProcessIfNeeded(
+          payload.projectId,
+          payload.status,
+          payload.activeProcessJobId,
+          hasSource,
         );
       } catch (error) {
         if (cancelled) return;
@@ -63,11 +72,18 @@ export function StudioWorkspace() {
           `Restored from local cache (${saved.projectName}); server unavailable.`,
         );
 
+        const hasSource = Boolean(saved.sourceFileUrl);
         await resumeGenerationIfNeeded(
           saved.projectId,
           saved.status,
           saved.activeJobId,
-          Boolean(saved.sourceFileUrl),
+          hasSource,
+        );
+        await resumeProcessIfNeeded(
+          saved.projectId,
+          saved.status,
+          saved.activeProcessJobId,
+          hasSource,
         );
       }
     })();

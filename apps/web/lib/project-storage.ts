@@ -20,6 +20,7 @@ export type SavedStudioProject = {
   aiProvider?: string | null;
   enhancedPrompt?: string | null;
   activeJobId?: string | null;
+  activeProcessJobId?: string | null;
   processedModelUrl: string | null;
   unfoldSvgUrl: string | null;
   unfoldPdfUrl: string | null;
@@ -44,6 +45,7 @@ export function studioStateToSavedProject(state: {
   aiProvider: string | null;
   enhancedPrompt: string | null;
   activeJobId: string | null;
+  activeProcessJobId: string | null;
   processedModelUrl: string | null;
   unfoldSvgUrl: string | null;
   unfoldPdfUrl: string | null;
@@ -66,6 +68,7 @@ export function studioStateToSavedProject(state: {
     aiProvider: state.aiProvider,
     enhancedPrompt: state.enhancedPrompt,
     activeJobId: state.activeJobId,
+    activeProcessJobId: state.activeProcessJobId,
     processedModelUrl: state.processedModelUrl,
     unfoldSvgUrl: state.unfoldSvgUrl,
     unfoldPdfUrl: state.unfoldPdfUrl,
@@ -100,7 +103,7 @@ function fileNameFromUrl(url: string | null | undefined): string | null {
 /** Map backend project payload into studio localStorage shape. */
 export function projectDetailToSavedStudio(
   project: ProjectDetailResponse,
-  fallback?: Pick<SavedStudioProject, "sourceFileName" | "activeJobId">,
+  fallback?: Pick<SavedStudioProject, "sourceFileName" | "activeJobId" | "activeProcessJobId">,
 ): StudioProjectSnapshot {
   return {
     projectId: project.id,
@@ -114,7 +117,13 @@ export function projectDetailToSavedStudio(
     aiProvider: project.aiProvider ?? null,
     enhancedPrompt: project.enhancedPrompt ?? null,
     activeJobId:
-      project.status === "processing" ? (fallback?.activeJobId ?? null) : null,
+      project.status === "processing" && !project.sourceFileUrl
+        ? (fallback?.activeJobId ?? null)
+        : null,
+    activeProcessJobId:
+      project.status === "processing" && project.sourceFileUrl
+        ? (fallback?.activeProcessJobId ?? null)
+        : null,
     processedModelUrl: project.processedModelUrl ?? null,
     unfoldSvgUrl: project.unfoldSvgUrl ?? null,
     unfoldPdfUrl: project.unfoldPdfUrl ?? null,

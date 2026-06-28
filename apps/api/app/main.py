@@ -7,16 +7,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import export, generate, health, process, upload
+from app.routers import export, generate, health, jobs, process, upload
 from app.services.ai.generation_queue import generation_queue
+from app.services.process_queue import process_queue
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background workers on startup."""
     await generation_queue.start()
+    await process_queue.start()
     await generation_queue.recover_pending_jobs()
+    await process_queue.recover_pending_jobs()
     yield
+    await process_queue.stop()
     await generation_queue.stop()
 
 
@@ -45,6 +49,7 @@ app.mount(
 app.include_router(health.router)
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(generate.router, prefix="/api", tags=["generate"])
+app.include_router(jobs.router, prefix="/api", tags=["jobs"])
 app.include_router(process.router, prefix="/api", tags=["process"])
 app.include_router(export.router, prefix="/api", tags=["export"])
 

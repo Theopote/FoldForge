@@ -1,6 +1,7 @@
 """Build API responses for generation job polling."""
 
-from app.schemas.generation_job import GenerationJob, GenerationJobResponse, JobStatus
+from app.schemas.job import JobStatus
+from app.schemas.generation_job import GenerationJob, GenerationJobResponse
 from app.services.project_store import project_store
 
 
