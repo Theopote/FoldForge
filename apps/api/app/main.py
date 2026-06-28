@@ -10,6 +10,7 @@ from app.config import settings
 from app.routers import export, generate, health, jobs, process, upload
 from app.services.ai.generation_queue import generation_queue
 from app.services.process_queue import process_queue
+from app.services.storage_cleanup import storage_cleanup_task
 
 
 @asynccontextmanager
@@ -19,7 +20,9 @@ async def lifespan(app: FastAPI):
     await process_queue.start()
     await generation_queue.recover_pending_jobs()
     await process_queue.recover_pending_jobs()
+    await storage_cleanup_task.start()
     yield
+    await storage_cleanup_task.stop()
     await process_queue.stop()
     await generation_queue.stop()
 

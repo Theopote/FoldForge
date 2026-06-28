@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # Papercraft quality — strict (default) vs warning overlap policy; see unfold_repair
     block_export_on_unfold_overlap: bool = True
 
+    # Storage retention — delete unreferenced files under uploads/processed/exports
+    storage_cleanup_enabled: bool = True
+    storage_cleanup_interval_sec: float = 3600.0
+    storage_file_ttl_days: int = 30
+
 
 settings = Settings()
 
