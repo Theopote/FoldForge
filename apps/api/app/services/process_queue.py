@@ -131,10 +131,14 @@ class ProcessQueue:
         project_store.update(project)
 
         def on_progress(progress: int, message: str) -> None:
-            if process_job_store.is_cancel_requested(job_id):
+            if process_job_store.update_progress_and_renew_lock(
+                job_id,
+                self._worker_id,
+                self._lease_sec,
+                progress=progress,
+                message=message,
+            ):
                 raise JobCancelledError("Processing cancelled.")
-            process_job_store.update(job_id, progress=progress, message=message)
-            process_job_store.renew_lock(job_id, self._worker_id, self._lease_sec)
 
         def cancel_check() -> bool:
             return process_job_store.is_cancel_requested(job_id)

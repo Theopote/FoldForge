@@ -124,13 +124,12 @@ async def test_cancel_running_process_job(
 
     def slow_run_pipeline(*_args, cancel_check=None, on_progress=None, **_kwargs):
         started.set()
-        for _ in range(300):
+        while True:
+            if cancel_check is not None and cancel_check():
+                raise JobCancelledError("Processing cancelled.")
             if on_progress is not None:
                 on_progress(15, "Slow step")
-            elif cancel_check is not None and cancel_check():
-                raise JobCancelledError("Processing cancelled.")
             time.sleep(0.02)
-        raise RuntimeError("Pipeline should have been cancelled")
 
     monkeypatch.setattr(process_queue_module, "run_pipeline", slow_run_pipeline)
 
@@ -177,6 +176,7 @@ async def test_cancel_running_process_job(
 
     cancel = await api_client.post(f"/api/process-jobs/{job_id}/cancel")
     assert cancel.status_code == 200
+    assert cancel.json()["cancelRequested"] is True
 
     job = await wait_for_process_job(api_client, job_id, timeout_sec=30.0)
     assert job["status"] == JobStatus.CANCELLED.value

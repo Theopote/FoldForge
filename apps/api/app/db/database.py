@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
-from threading import Lock
 from typing import Iterator
 
 from app.config import settings
@@ -102,25 +102,83 @@ _PROCESS_JOB_COLUMN_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("last_error", "TEXT"),
 )
 
+_BUSY_TIMEOUT_MS = 5000
+
+
+class _RWLock:
+    """Reader-writer lock: concurrent reads, exclusive writes."""
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._readers = 0
+        self._writers_waiting = 0
+        self._writer_active = False
+
+    def acquire_read(self) -> None:
+        with self._cond:
+            while self._writer_active or self._writers_waiting > 0:
+                self._cond.wait()
+            self._readers += 1
+
+    def release_read(self) -> None:
+        with self._cond:
+            self._readers -= 1
+            if self._readers == 0:
+                self._cond.notify_all()
+
+    def acquire_write(self) -> None:
+        with self._cond:
+            self._writers_waiting += 1
+            try:
+                while self._readers > 0 or self._writer_active:
+                    self._cond.wait()
+                self._writer_active = True
+            finally:
+                self._writers_waiting -= 1
+
+    def release_write(self) -> None:
+        with self._cond:
+            self._writer_active = False
+            self._cond.notify_all()
+
 
 class Database:
     """Thread-safe SQLite access for FoldForge MVP persistence."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
-        self._lock = Lock()
+        self._lock = _RWLock()
         path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 
+    def _open_connection(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self._path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        return conn
+
+    @contextmanager
+    def read_connection(self) -> Iterator[sqlite3.Connection]:
+        """Open a read connection. Multiple reads may run concurrently."""
+        self._lock.acquire_read()
+        try:
+            conn = self._open_connection()
+            try:
+                yield conn
+            finally:
+                conn.close()
+        finally:
+            self._lock.release_read()
+
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
-        """Open a connection with WAL mode and foreign keys enabled."""
-        with self._lock:
-            conn = sqlite3.connect(self._path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
+        """Open a read-write connection with exclusive access."""
+        self._lock.acquire_write()
+        try:
+            conn = self._open_connection()
             try:
-                conn.execute("PRAGMA journal_mode=WAL")
-                conn.execute("PRAGMA foreign_keys=ON")
                 yield conn
                 conn.commit()
             except Exception:
@@ -128,6 +186,8 @@ class Database:
                 raise
             finally:
                 conn.close()
+        finally:
+            self._lock.release_write()
 
     def _init_schema(self) -> None:
         with self.connection() as conn:

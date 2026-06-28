@@ -61,7 +61,7 @@ class ProjectStore:
 
     def get(self, project_id: str) -> Project | None:
         """Fetch a project by ID."""
-        with database.connection() as conn:
+        with database.read_connection() as conn:
             row = conn.execute(
                 f"SELECT {_PROJECT_COLUMNS} FROM projects WHERE id = ?",
                 (project_id,),
@@ -78,7 +78,7 @@ class ProjectStore:
 
     def exists(self, project_id: str) -> bool:
         """Check whether a project exists."""
-        with database.connection() as conn:
+        with database.read_connection() as conn:
             row = conn.execute(
                 "SELECT 1 FROM projects WHERE id = ?",
                 (project_id,),

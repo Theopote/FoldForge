@@ -18,7 +18,7 @@ class GenerationJobStore:
         return job
 
     def get(self, job_id: str) -> GenerationJob | None:
-        with database.connection() as conn:
+        with database.read_connection() as conn:
             row = conn.execute(
                 "SELECT data FROM generation_jobs WHERE id = ?",
                 (job_id,),
@@ -28,7 +28,7 @@ class GenerationJobStore:
         return GenerationJob.model_validate(json.loads(row["data"]))
 
     def get_by_project(self, project_id: str) -> GenerationJob | None:
-        with database.connection() as conn:
+        with database.read_connection() as conn:
             row = conn.execute(
                 """
                 SELECT data FROM generation_jobs
@@ -45,7 +45,7 @@ class GenerationJobStore:
     def list_incomplete(self) -> list[GenerationJob]:
         """Return queued or running jobs (for restart recovery)."""
         placeholders = ", ".join("?" for _ in _INCOMPLETE_STATUSES)
-        with database.connection() as conn:
+        with database.read_connection() as conn:
             rows = conn.execute(
                 f"""
                 SELECT data FROM generation_jobs
