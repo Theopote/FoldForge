@@ -8,6 +8,7 @@ from shapely.geometry import Polygon, box
 from shapely.strtree import STRtree
 
 from app.models.geometry import LayoutPage, PlacedPiece, UnfoldPiece
+from app.config import settings
 from app.schemas.model import PaperSize
 from app.services.cancel import CancelCheck, check_cancelled
 from app.services.nfp_packing import nfp_placement_candidates
@@ -29,6 +30,7 @@ MARGIN_MM = 10.0
 DEFAULT_GAP_MM = 8.0
 COLLISION_EPS_MM2 = 0.25
 PLACEMENT_STEP_MM = 4.0
+SHELF_SCAN_STEP_MM = 6.0
 
 
 @dataclass
@@ -227,6 +229,96 @@ def layout_pieces(
     """
     Pack pieces using bottom-left nesting with Shapely collision detection.
 
+    Uses exact NFP candidates for small models; switches to shelf scanning when
+    piece count exceeds ``layout_nfp_max_pieces`` (Advanced meshes can exceed 50).
+    """
+    if len(pieces) > settings.layout_nfp_max_pieces:
+        return layout_pieces_shelf(
+            pieces,
+            paper_size,
+            gap_mm=gap_mm,
+            cancel_check=cancel_check,
+        )
+    return layout_pieces_nfp(
+        pieces,
+        paper_size,
+        gap_mm=gap_mm,
+        cancel_check=cancel_check,
+    )
+
+
+def layout_pieces_shelf(
+    pieces: list[UnfoldPiece],
+    paper_size: PaperSize,
+    *,
+    gap_mm: float = DEFAULT_GAP_MM,
+    cancel_check: CancelCheck | None = None,
+) -> LayoutPlacementResult:
+    """Fast row/shelf packing with polygon collision checks (large models)."""
+    page_width, page_height = PAPER_SIZES_MM[paper_size]
+    usable_w = page_width - 2 * MARGIN_MM
+    usable_h = page_height - 2 * MARGIN_MM
+    usable_box = box(MARGIN_MM, MARGIN_MM, MARGIN_MM + usable_w, MARGIN_MM + usable_h)
+
+    oversize = find_pieces_too_large_for_paper(pieces, paper_size)
+    if oversize:
+        return LayoutPlacementResult(
+            pages=[],
+            unplaced_pieces=list(pieces),
+            issues=LayoutIssueReport(
+                oversize_piece_labels=[piece.label for piece in oversize],
+            ),
+        )
+
+    sorted_pieces = sorted(
+        pieces,
+        key=lambda p: piece_polygon_area(p) or _bbox_area(p),
+        reverse=True,
+    )
+
+    pages: list[LayoutPage] = [
+        LayoutPage(index=0, width_mm=page_width, height_mm=page_height, placed_pieces=[]),
+    ]
+    unplaced_pieces: list[UnfoldPiece] = []
+
+    for piece in sorted_pieces:
+        check_cancelled(cancel_check)
+        placed = _place_piece_shelf(
+            piece,
+            pages,
+            usable_box,
+            usable_w,
+            usable_h,
+            page_width,
+            page_height,
+            gap_mm=gap_mm,
+            cancel_check=cancel_check,
+        )
+        if not placed:
+            unplaced_pieces.append(piece)
+
+    pages = [page for page in pages if page.placed_pieces]
+    for index, page in enumerate(pages):
+        page.index = index
+
+    issues = detect_layout_issues(pages)
+    return LayoutPlacementResult(
+        pages=pages,
+        unplaced_pieces=unplaced_pieces,
+        issues=issues,
+    )
+
+
+def layout_pieces_nfp(
+    pieces: list[UnfoldPiece],
+    paper_size: PaperSize,
+    *,
+    gap_mm: float = DEFAULT_GAP_MM,
+    cancel_check: CancelCheck | None = None,
+) -> LayoutPlacementResult:
+    """
+    Pack pieces using bottom-left nesting with NFP placement candidates.
+
     Tries 0°/90°/180°/270° rotations and prefers adding pages.
     Individual pieces are never scaled — papercraft parts must stay at uniform scale.
     """
@@ -359,8 +451,13 @@ def _find_placement_on_page(
             continue
 
         trial_poly_norm = piece_to_shapely(normalized, include_tabs=True, gap_buffer=0.0)
+        use_convex_nfp = len(placed_polys) > 6
         nfp_candidates = nfp_placement_candidates(
-            placed_polys, trial_poly_norm, cancel_check=cancel_check
+            placed_polys,
+            trial_poly_norm,
+            cancel_check=cancel_check,
+            max_stationary=settings.layout_nfp_max_stationary,
+            use_convex_nfp=use_convex_nfp,
         )
         rotation_candidates = _candidates_for_piece(candidates, nfp_candidates)
 
@@ -460,3 +557,131 @@ def _bbox_area(piece: UnfoldPiece) -> float:
 def _normalize_to_origin(piece: UnfoldPiece) -> UnfoldPiece:
     min_x, min_y, _, _ = piece_bounds(piece, include_tabs=True)
     return translate_piece(piece, -min_x, -min_y)
+
+
+def _place_piece_shelf(
+    piece: UnfoldPiece,
+    pages: list[LayoutPage],
+    usable_box: Polygon,
+    usable_w: float,
+    usable_h: float,
+    page_width: float,
+    page_height: float,
+    *,
+    gap_mm: float,
+    cancel_check: CancelCheck | None = None,
+) -> bool:
+    for page in pages:
+        check_cancelled(cancel_check)
+        placement = _find_shelf_placement_on_page(
+            piece,
+            page,
+            usable_box,
+            usable_w,
+            usable_h,
+            gap_mm=gap_mm,
+            cancel_check=cancel_check,
+        )
+        if placement is not None:
+            normalized, _rotation, x, y = placement
+            placed_piece = translate_piece(normalized, x, y)
+            page.placed_pieces.append(
+                PlacedPiece(piece=placed_piece, offset_x=x, offset_y=y, page_index=page.index),
+            )
+            return True
+
+    new_page = LayoutPage(
+        index=len(pages),
+        width_mm=page_width,
+        height_mm=page_height,
+        placed_pieces=[],
+    )
+    pages.append(new_page)
+    placement = _find_shelf_placement_on_page(
+        piece,
+        new_page,
+        usable_box,
+        usable_w,
+        usable_h,
+        gap_mm=gap_mm,
+        cancel_check=cancel_check,
+    )
+    if placement is not None:
+        normalized, _rotation, x, y = placement
+        placed_piece = translate_piece(normalized, x, y)
+        new_page.placed_pieces.append(
+            PlacedPiece(piece=placed_piece, offset_x=x, offset_y=y, page_index=new_page.index),
+        )
+        return True
+
+    pages.pop()
+    return False
+
+
+def _find_shelf_placement_on_page(
+    piece: UnfoldPiece,
+    page: LayoutPage,
+    usable_box: Polygon,
+    usable_w: float,
+    usable_h: float,
+    *,
+    gap_mm: float,
+    cancel_check: CancelCheck | None = None,
+) -> tuple[UnfoldPiece, int, float, float] | None:
+    placed_polys: list[Polygon] = []
+    for placed in page.placed_pieces:
+        poly = piece_to_shapely(placed.piece, include_tabs=True, gap_buffer=gap_mm * 0.35)
+        if not poly.is_empty:
+            placed_polys.append(poly)
+
+    tree = STRtree(placed_polys) if placed_polys else None
+    row_tops = [MARGIN_MM]
+    for poly in placed_polys:
+        row_tops.append(poly.bounds[3] + gap_mm)
+    row_tops = sorted(set(round(y, 2) for y in row_tops if y <= MARGIN_MM + usable_h))
+    if not row_tops:
+        row_tops = [MARGIN_MM]
+
+    best: tuple[float, UnfoldPiece, int, float, float] | None = None
+
+    for rotation in range(4):
+        check_cancelled(cancel_check)
+        normalized = _normalize_to_origin(rotate_piece(piece, rotation))
+        min_x, min_y, max_x, max_y = piece_bounds(normalized, include_tabs=True)
+        width = max_x - min_x
+        height = max_y - min_y
+        if width > usable_w or height > usable_h:
+            continue
+
+        for row_y in row_tops:
+            if row_y + height > MARGIN_MM + usable_h:
+                continue
+
+            x = MARGIN_MM
+            while x + width <= MARGIN_MM + usable_w + COLLISION_EPS_MM2:
+                if int((x - MARGIN_MM) / SHELF_SCAN_STEP_MM) % 8 == 0:
+                    check_cancelled(cancel_check)
+                trial = translate_piece(normalized, x - min_x, row_y - min_y)
+                trial_poly = piece_to_shapely(trial, include_tabs=True, gap_buffer=0.0)
+                if trial_poly.is_empty:
+                    x += SHELF_SCAN_STEP_MM
+                    continue
+                if not _fits_usable(trial_poly, usable_box):
+                    x += SHELF_SCAN_STEP_MM
+                    continue
+                if tree is not None and _collides(trial_poly, placed_polys, tree):
+                    x += SHELF_SCAN_STEP_MM
+                    continue
+
+                score = row_y * 10000 + x
+                if best is None or score < best[0]:
+                    best = (score, normalized, rotation, x - min_x, row_y - min_y)
+                break
+
+            if best is not None:
+                break
+
+    if best is None:
+        return None
+    _, normalized, rotation, x, y = best
+    return normalized, rotation, x, y

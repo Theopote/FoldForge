@@ -195,10 +195,17 @@ def nfp_placement_candidates(
     *,
     edge_step_mm: float = 6.0,
     cancel_check: CancelCheck | None = None,
+    max_stationary: int | None = None,
+    use_convex_nfp: bool = False,
 ) -> list[tuple[float, float]]:
     """Generate candidate reference-point positions from decomposed NFP boundaries."""
+    if max_stationary is not None and len(stationary_polygons) > max_stationary:
+        return []
+
     ref_x, ref_y = nfp_reference_point(orbiting_polygon)
     orbiting_at_origin = translate(orbiting_polygon, xoff=-ref_x, yoff=-ref_y)
+
+    nfp_fn = no_fit_polygon_convex if use_convex_nfp else no_fit_polygon
 
     candidates: set[tuple[float, float]] = set()
 
@@ -207,7 +214,7 @@ def nfp_placement_candidates(
         if stationary.is_empty:
             continue
 
-        nfp = no_fit_polygon(stationary, orbiting_at_origin)
+        nfp = nfp_fn(stationary, orbiting_at_origin)
         if nfp.is_empty:
             continue
 

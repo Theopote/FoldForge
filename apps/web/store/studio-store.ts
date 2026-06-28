@@ -4,6 +4,7 @@ import type { ModelMeshStats } from "@/lib/geometry-stats";
 import { cancelAllJobPolls } from "@/lib/job-poll-session";
 import type { StudioProjectSnapshot } from "@/lib/project-storage";
 import { persistLastProjectId } from "@/lib/project-storage";
+import { scheduleProjectSettingsSync } from "@/lib/project-settings-sync";
 import {
   DEFAULT_PROJECT_SETTINGS,
   type CraftabilityScore,
@@ -215,7 +216,13 @@ export const useStudioStore = create<StudioState>((set) => ({
   setActiveProcessJobId: (activeProcessJobId) => set({ activeProcessJobId }),
   setStatus: (status) => set({ status }),
   updateSettings: (partial) =>
-    set((state) => ({ settings: { ...state.settings, ...partial } })),
+    set((state) => {
+      const settings = { ...state.settings, ...partial };
+      if (state.projectId) {
+        scheduleProjectSettingsSync(state.projectId, settings);
+      }
+      return { settings };
+    }),
   setMeshStats: (meshStats) => set({ meshStats }),
   setResults: (payload) => set(payload),
   beginPapercraftProcessing: () =>

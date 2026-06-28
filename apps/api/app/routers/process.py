@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.schemas.generation_job import GenerationJobResponse
 from app.schemas.job import JobStatus
-from app.schemas.model import ProjectStatus
+from app.schemas.model import ProjectSettings, ProjectStatus
 from app.schemas.process_job import ProcessJob, ProcessJobResponse
 from app.schemas.unfold import ProcessModelRequest
 from app.services.ai.job_response import build_generation_job_response
@@ -103,6 +103,21 @@ async def get_project(project_id: str) -> dict:
     project = project_store.get(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
+    return project.model_dump(by_alias=True)
+
+
+@router.patch("/projects/{project_id}/settings")
+async def update_project_settings(
+    project_id: str,
+    settings: ProjectSettings,
+) -> dict:
+    """Persist papercraft settings for a project (Studio UI sync)."""
+    project = project_store.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    project.settings = settings
+    project_store.update(project)
     return project.model_dump(by_alias=True)
 
 

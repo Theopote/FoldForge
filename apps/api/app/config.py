@@ -74,6 +74,22 @@ class Settings(BaseSettings):
     storage_cleanup_interval_sec: float = 3600.0
     storage_file_ttl_days: int = 30
 
+    # Layout — exact NFP nesting is O(n²) and slow for large models
+    layout_nfp_max_pieces: int = Field(
+        default=24,
+        validation_alias=AliasChoices(
+            "LAYOUT_NFP_MAX_PIECES",
+            "FOLDFORGE_LAYOUT_NFP_MAX_PIECES",
+        ),
+    )
+    layout_nfp_max_stationary: int = Field(
+        default=12,
+        validation_alias=AliasChoices(
+            "LAYOUT_NFP_MAX_STATIONARY",
+            "FOLDFORGE_LAYOUT_NFP_MAX_STATIONARY",
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_auth_settings(self):
         if self.require_api_auth and not self.api_key:

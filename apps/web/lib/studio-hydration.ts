@@ -2,6 +2,10 @@ import { resumeGenerationIfNeeded } from "@/features/studio/resume-generation";
 import { resumeProcessIfNeeded } from "@/features/studio/resume-process";
 import { ProjectNotFoundError, getProject } from "@/lib/api";
 import {
+  pauseProjectSettingsSync,
+  resumeProjectSettingsSync,
+} from "@/lib/project-settings-sync";
+import {
   persistLastProjectId,
   projectDetailToStudioSnapshot,
 } from "@/lib/project-storage";
@@ -17,6 +21,7 @@ export async function hydrateStudioProject(
   projectId: string,
 ): Promise<StudioHydrationResult> {
   try {
+    pauseProjectSettingsSync();
     const remote = await getProject(projectId);
     const snapshot = projectDetailToStudioSnapshot(remote);
 
@@ -43,5 +48,7 @@ export async function hydrateStudioProject(
       return "not_found";
     }
     return "offline";
+  } finally {
+    resumeProjectSettingsSync();
   }
 }

@@ -19,6 +19,7 @@ foldforge/
     processed/    # Cleaned / simplified meshes
     exports/      # SVG, PDF, ZIP outputs
   docs/           # Product & architecture docs
+  docker-compose.yml
 ```
 
 ## Prerequisites
@@ -85,6 +86,27 @@ Open:
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
 
+### Docker Compose (production-like single host)
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose v2).
+
+```bash
+# Optional: API key / AI provider
+cp .env.docker.example .env
+
+docker compose up --build
+```
+
+- Studio: http://localhost:3000  
+- API docs: http://localhost:8000/docs  
+- Data: Docker volume `foldforge-storage` (SQLite + uploads/exports)
+
+Reset all data: `docker compose down -v`
+
+For hot reload during development, use the native *Quick Start* above instead of Docker.
+
+Planned improvements (SSE job stream, interactive seam editor, texture baking) are evaluated in [`docs/future-features.md`](docs/future-features.md).
+
 ## Supported formats
 
 | Input | Status | Notes |
@@ -145,6 +167,7 @@ Aborting the frontend poll (`AbortSignal`) stops status updates locally; use **C
 | GET | `/api/process-jobs/{jobId}` | Poll process job status / result |
 | POST | `/api/process-jobs/{jobId}/cancel` | Cancel queued job or request stop for running job |
 | GET | `/api/projects/:id` | Get project |
+| PATCH | `/api/projects/:id/settings` | Save papercraft settings (Studio sync) |
 | GET | `/api/projects/:id/export/pdf` | Download PDF |
 | GET | `/api/projects/:id/export/svg` | Download SVG |
 | GET | `/api/projects/:id/export/zip` | Download ZIP |
@@ -183,7 +206,7 @@ Backend tests live under `apps/api/tests/`:
 - **Export** — SVG/PDF/ZIP structure and page sizing
 - **Integration** — upload + async process job via FastAPI
 
-Pipeline snapshot tests patch in a fast row layout (NFP nesting is covered separately in unit tests) so CI stays under a few minutes.
+Pipeline snapshot tests patch in a fast row layout (NFP nesting is covered separately in unit tests) so CI stays under a few minutes. Models with more than **24 pieces** (typical on Advanced difficulty) automatically use shelf packing in production instead of exact NFP.
 
 Refresh pipeline snapshots after intentional geometry changes:
 

@@ -22,11 +22,15 @@
 
 ## Phase 3 — Maker Experience
 
-- Assembly instruction generator
-- Texture / color baking
-- Paper thickness compensation
-- Community templates & sharing
-- User accounts & project history
+Priority order (updated — see also `docs/future-features.md`):
+
+1. **Texture / color baking** — highest visual impact; extend existing `colorMode` into baked piece fills
+2. Interactive **SVG seam editor** (drag seams → incremental re-unfold)
+3. **SSE job progress** — replace polling for lower latency
+4. Assembly instruction generator
+5. Paper thickness compensation
+6. Community templates & sharing
+7. User accounts & project history
 
 ## Phase 4 — Pro Tools
 

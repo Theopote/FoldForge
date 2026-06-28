@@ -127,6 +127,29 @@ export async function getProject(projectId: string): Promise<ProjectDetailRespon
   return response.json() as Promise<ProjectDetailResponse>;
 }
 
+/** Persist Studio papercraft settings to the backend (debounced in UI). */
+export async function patchProjectSettings(
+  projectId: string,
+  settings: ProjectSettings,
+): Promise<ProjectDetailResponse> {
+  const response = await fetch(`/api/projects/${projectId}/settings`, {
+    method: "PATCH",
+    headers: apiAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(settings),
+  });
+
+  if (response.status === 404) {
+    throw new ProjectNotFoundError(projectId);
+  }
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Failed to save project settings."));
+  }
+
+  return response.json() as Promise<ProjectDetailResponse>;
+}
+
 /**
  * Fetch the latest AI generation job for a project (resume without localStorage jobId).
  */
