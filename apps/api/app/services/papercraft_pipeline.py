@@ -11,11 +11,11 @@ from app.services.mesh_cleaner import clean_mesh, mesh_quality_issues
 from app.services.mesh_simplifier import scale_to_target_height, simplify_mesh
 from app.services.model_loader import load_mesh
 from app.services.pdf_exporter import export_pdf
-from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
+from app.services.seam_generator import compute_edge_dihedral_angles
 from app.services.svg_exporter import export_svg
 from app.services.outline_optimizer import optimize_pieces_cut_outlines
 from app.services.tab_generator import add_tabs_to_pieces
-from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
+from app.services.unfold_repair import collect_unfold_warnings, unfold_with_auto_repair
 from app.services.zip_exporter import export_zip
 from app.utils.file_utils import build_storage_url
 
@@ -40,10 +40,9 @@ def run_pipeline(
     mesh = simplify_mesh(mesh, settings.difficulty, settings.style)
 
     dihedral = compute_edge_dihedral_angles(mesh)
-    seams = select_seams(mesh, settings.difficulty, dihedral=dihedral)
-    patches = split_into_patches(mesh, seams)
-    pieces = unfold_mesh(mesh, patches, dihedral=dihedral)
-    unfold_warnings = detect_unfold_overlaps(pieces)
+    unfold_result = unfold_with_auto_repair(mesh, settings.difficulty, dihedral=dihedral)
+    pieces = unfold_result.pieces
+    unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
     pieces = add_tabs_to_pieces(
         pieces,
         add_tabs=settings.add_tabs,

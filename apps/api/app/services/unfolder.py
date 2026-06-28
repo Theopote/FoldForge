@@ -387,7 +387,7 @@ def detect_unfold_overlaps(pieces: list[UnfoldPiece]) -> list[str]:
         if piece.has_overlap:
             warnings.append(
                 f"Piece {piece.label} has overlapping folds — "
-                "try Easy mode or a simpler model."
+                "auto-repair could not fully fix this patch."
             )
     return warnings
 

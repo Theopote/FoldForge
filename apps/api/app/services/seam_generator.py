@@ -147,6 +147,46 @@ def _subpatch_sizes(
     return count_a, len(patch_set) - count_a
 
 
+def find_best_split_seam_in_patch(
+    mesh: trimesh.Trimesh,
+    seams: set[tuple[int, int]],
+    face_indices: list[int],
+    dihedral: EdgeDihedralData,
+) -> tuple[int, int] | None:
+    """
+    Pick an interior edge to split a patch (repair seam for unfold overlaps).
+
+    Prefers sharp, hidden creases and balanced sub-patches.
+    """
+    if len(face_indices) <= 1:
+        return None
+
+    adjacency, interior_edges = _build_face_adjacency(mesh)
+    patch_set = set(face_indices)
+    best_edge: tuple[int, int] | None = None
+    best_score = -1.0
+
+    for f1, f2, key in interior_edges:
+        if f1 not in patch_set or f2 not in patch_set:
+            continue
+        if key in seams:
+            continue
+
+        side_a, side_b = _subpatch_sizes(adjacency, patch_set, key)
+        if side_a <= 0 or side_b <= 0:
+            continue
+
+        preference = _seam_preference_score(key, dihedral)
+        balance = _split_balance_score(len(face_indices), side_a, side_b)
+        score = preference + balance * SPLIT_BALANCE_WEIGHT
+
+        if score > best_score:
+            best_score = score
+            best_edge = key
+
+    return best_edge
+
+
 def _split_balance_score(patch_size: int, side_a: int, side_b: int) -> float:
     """1.0 when perfectly balanced, 0.0 when one side is empty."""
     if patch_size <= 0 or side_a <= 0 or side_b <= 0:

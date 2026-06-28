@@ -25,6 +25,7 @@ from app.services.parametrization import (
 )
 from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
 from app.services.tab_generator import add_tabs_to_pieces
+from app.services.unfold_repair import unfold_with_auto_repair
 from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
 
 
@@ -126,6 +127,21 @@ def test_seam_split_limits() -> None:
     print("seam split easy:", len(patches), "patches")
 
 
+def test_unfold_auto_repair() -> None:
+    mesh = _box_mesh()
+    data = compute_edge_dihedral_angles(mesh)
+    result = unfold_with_auto_repair(mesh, Difficulty.STANDARD, dihedral=data)
+    overlap_count = sum(1 for p in result.pieces if p.has_overlap)
+    assert overlap_count == 0
+    print(
+        "unfold auto-repair:",
+        len(result.pieces),
+        "pieces",
+        result.repair_steps,
+        "repair steps",
+    )
+
+
 def test_unfold_layout_tabs() -> None:
     mesh = _box_mesh()
     data = compute_edge_dihedral_angles(mesh)
@@ -161,6 +177,7 @@ def main() -> None:
     test_nonconvex_nfp_decomposition()
     test_cut_outline_boolean()
     test_seam_split_limits()
+    test_unfold_auto_repair()
     test_unfold_layout_tabs()
     print("All geometry tests passed.")
 

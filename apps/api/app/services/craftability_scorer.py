@@ -67,6 +67,14 @@ def compute_craftability(
         score -= 8
         warnings.append("Glue tabs are densely packed — folding may be tricky.")
 
+    overlap_count = sum(1 for piece in pieces if piece.has_overlap)
+    if overlap_count > 0:
+        score -= min(45, overlap_count * 20)
+        warnings.append(
+            f"{overlap_count} piece(s) have unfold overlaps — "
+            "the printed template may not fold correctly."
+        )
+
     if difficulty == Difficulty.ADVANCED and piece_count > 20:
         warnings.append("Advanced mode with many pieces — not ideal for beginners.")
 
