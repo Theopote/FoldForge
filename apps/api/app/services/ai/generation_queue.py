@@ -40,6 +40,22 @@ class GenerationQueue:
     async def enqueue(self, job_id: str) -> None:
         await self._queue.put(job_id)
 
+    async def recover_pending_jobs(self) -> None:
+        """Re-queue jobs that were interrupted by a server restart."""
+        pending = generation_job_store.list_incomplete()
+        if not pending:
+            return
+
+        logger.info("Recovering %d pending generation job(s)", len(pending))
+        for job in pending:
+            if job.status == JobStatus.RUNNING:
+                generation_job_store.update(
+                    job.id,
+                    status=JobStatus.QUEUED,
+                    message="Re-queued after server restart",
+                )
+            await self.enqueue(job.id)
+
     async def _worker_loop(self) -> None:
         while True:
             job_id = await self._queue.get()

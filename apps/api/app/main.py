@@ -15,6 +15,7 @@ from app.services.ai.generation_queue import generation_queue
 async def lifespan(app: FastAPI):
     """Start background workers on startup."""
     await generation_queue.start()
+    await generation_queue.recover_pending_jobs()
     yield
     await generation_queue.stop()
 

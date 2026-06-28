@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     # Paths relative to monorepo root
     storage_root: Path = Path(__file__).resolve().parents[3] / "storage"
+    database_path: Path = storage_root / "foldforge.db"
     uploads_dir: Path = storage_root / "uploads"
     processed_dir: Path = storage_root / "processed"
     exports_dir: Path = storage_root / "exports"

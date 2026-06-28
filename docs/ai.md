@@ -121,7 +121,7 @@ pip install replicate
 app/services/ai/
   base.py              # ModelGeneratorProvider interface
   generation_queue.py  # Background worker
-  job_store.py         # In-memory job store
+  job_store.py         # SQLite-backed job store
   http_utils.py        # Download + data URI helpers
   registry.py          # auto | meshy | triposr | replicate | mock
   providers/

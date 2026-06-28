@@ -63,7 +63,7 @@ class ProjectSettings(BaseModel):
 
 
 class Project(BaseModel):
-    """In-memory project record (MVP — no database yet)."""
+    """Persisted project record (SQLite)."""
 
     id: str
     name: str

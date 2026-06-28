@@ -32,7 +32,7 @@ FastAPI service with modular routers and geometry services.
 | `services/` | Business & geometry logic |
 | `utils/` | File I/O, logging, geometry helpers |
 
-MVP uses in-memory `ProjectStore`; replace with PostgreSQL + Prisma later.
+MVP uses SQLite-backed `ProjectStore` and `GenerationJobStore` (`storage/foldforge.db`). PostgreSQL can replace SQLite when multi-instance deployment is needed.
 
 ## Storage
 
