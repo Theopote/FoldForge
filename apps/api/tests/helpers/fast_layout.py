@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from app.models.geometry import LayoutPage, PlacedPiece, UnfoldPiece
 from app.schemas.model import PaperSize
-from app.services.layout_engine import MARGIN_MM, PAPER_SIZES_MM, piece_bounds
+from app.services.layout_engine import (
+    MARGIN_MM,
+    PAPER_SIZES_MM,
+    find_pieces_too_large_for_paper,
+    piece_bounds,
+)
 
 
 def layout_pieces_row(
@@ -14,6 +19,9 @@ def layout_pieces_row(
 ) -> list[LayoutPage]:
     """Place pieces left-to-right, top-to-bottom without NFP (test helper)."""
     if not pieces:
+        return []
+
+    if find_pieces_too_large_for_paper(pieces, paper_size):
         return []
 
     page_w, page_h = PAPER_SIZES_MM[paper_size]
@@ -45,9 +53,12 @@ def layout_pieces_row(
             row_height = 0.0
 
     for piece in pieces:
-        min_x, min_y, max_x, max_y = piece_bounds(piece)
+        min_x, min_y, max_x, max_y = piece_bounds(piece, include_tabs=True)
         width = max_x - min_x
         height = max_y - min_y
+
+        if width > usable_w or height > usable_h:
+            continue
 
         if cursor_x + width > MARGIN_MM + usable_w and cursor_x > MARGIN_MM:
             cursor_x = MARGIN_MM
@@ -56,6 +67,8 @@ def layout_pieces_row(
 
         if cursor_y + height > MARGIN_MM + usable_h:
             flush_page()
+            if height > usable_h:
+                continue
 
         placed.append(
             PlacedPiece(
