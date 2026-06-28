@@ -9,6 +9,7 @@ import trimesh
 from app.config import settings
 from app.models.geometry import UnfoldPiece
 from app.schemas.model import Difficulty
+from app.services.cancel import CancelCheck, check_cancelled
 from app.services.pipeline_errors import UnfoldRepairError
 from app.services.seam_generator import (
     EdgeDihedralData,
@@ -45,6 +46,7 @@ def unfold_with_auto_repair(
     *,
     max_iterations: int = MAX_UNFOLD_REPAIR_ITERATIONS,
     block_export_on_failure: bool | None = None,
+    cancel_check: CancelCheck | None = None,
 ) -> UnfoldRepairResult:
     """
     Unfold mesh patches and iteratively add repair seams when overlaps remain.
@@ -67,6 +69,7 @@ def unfold_with_auto_repair(
     repair_steps = 0
 
     for _ in range(max_iterations):
+        check_cancelled(cancel_check)
         overlapping = [piece for piece in pieces if piece.has_overlap]
         if not overlapping:
             if repair_steps > 0:
@@ -77,6 +80,7 @@ def unfold_with_auto_repair(
 
         added_any = False
         for piece in overlapping:
+            check_cancelled(cancel_check)
             vertex_2d, _ = compute_unfold_vertex_map(mesh, piece.face_ids, data)
             overlap_scores = score_seams_by_overlap(mesh, piece.face_ids, vertex_2d)
             edge = find_best_split_seam_in_patch(
@@ -93,6 +97,7 @@ def unfold_with_auto_repair(
         if not added_any:
             break
 
+        check_cancelled(cancel_check)
         repair_steps += 1
         patches = split_into_patches(mesh, seams)
         pieces = unfold_mesh(mesh, patches, dihedral=data)

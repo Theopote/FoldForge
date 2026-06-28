@@ -1,3 +1,5 @@
+"""Apply papercraft process job outcomes to studio state."""
+
 import {
   ProcessJobNotFoundError,
   getProjectProcessJob,
@@ -17,20 +19,8 @@ import {
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore, ProjectStatus } from "@/types";
 
-function applyCompletedProcessJob(job: ProcessJobResponse): void {
-  const { completePapercraftProcessing, addLog } = useStudioStore.getState();
-
-  completePapercraftProcessing({
-    processedModelUrl: job.processedModelUrl ?? null,
-    unfoldSvgUrl: job.unfoldSvgUrl ?? null,
-    unfoldPdfUrl: job.unfoldPdfUrl ?? null,
-    unfoldZipUrl: job.unfoldZipUrl ?? null,
-    stats: job.stats ?? null,
-    craftability: (job.craftability as CraftabilityScore | undefined) ?? null,
-    status: (job.resultStatus as ProjectStatus) ?? "ready",
-  });
-  clearJobProgressTracking();
-  addLog("Papercraft template ready.");
+function logProcessJobStats(job: ProcessJobResponse): void {
+  const { addLog } = useStudioStore.getState();
 
   if (job.stats) {
     addLog(
@@ -45,6 +35,50 @@ function applyCompletedProcessJob(job: ProcessJobResponse): void {
       addLog(`Note: ${warning}`);
     }
   }
+}
+
+/** Sync UI with a terminal process job (completed, failed, or cancelled). */
+export function applyTerminalProcessJob(job: ProcessJobResponse): boolean {
+  const { completePapercraftProcessing, setStatus, setError, setActiveProcessJobId, addLog } =
+    useStudioStore.getState();
+
+  setActiveProcessJobId(null);
+  clearJobProgressTracking();
+
+  if (job.status === "completed") {
+    completePapercraftProcessing({
+      processedModelUrl: job.processedModelUrl ?? null,
+      unfoldSvgUrl: job.unfoldSvgUrl ?? null,
+      unfoldPdfUrl: job.unfoldPdfUrl ?? null,
+      unfoldZipUrl: job.unfoldZipUrl ?? null,
+      stats: job.stats ?? null,
+      craftability: (job.craftability as CraftabilityScore | undefined) ?? null,
+      status: (job.resultStatus as ProjectStatus) ?? "ready",
+    });
+    addLog("Papercraft template ready.");
+    logProcessJobStats(job);
+    return true;
+  }
+
+  if (job.status === "failed") {
+    const message = job.error ?? "Papercraft processing failed.";
+    setError(message);
+    setStatus("failed");
+    addLog(`Error: ${message}`);
+    return true;
+  }
+
+  if (job.status === "cancelled") {
+    setStatus("uploaded");
+    addLog("Processing cancelled.");
+    return true;
+  }
+
+  return false;
+}
+
+function applyCompletedProcessJob(job: ProcessJobResponse): void {
+  applyTerminalProcessJob(job);
 }
 
 /** Continue polling an async papercraft process job after reload. */
@@ -103,13 +137,7 @@ export async function resumeProcessIfNeeded(
       }
 
       if (job.status === "failed") {
-        const { setStatus, setError, setActiveProcessJobId, addLog } =
-          useStudioStore.getState();
-        setStatus("failed");
-        setError(job.error ?? "Papercraft processing failed.");
-        setActiveProcessJobId(null);
-        clearJobProgressTracking();
-        addLog(`Error: ${job.error ?? "Papercraft processing failed."}`);
+        applyTerminalProcessJob(job);
         return;
       }
 

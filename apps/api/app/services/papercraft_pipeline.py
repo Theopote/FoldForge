@@ -2,11 +2,11 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
 
 from app.config import settings as app_settings
 from app.models.geometry import PipelineResult
 from app.schemas.model import ProjectSettings
+from app.services.cancel import CancelCheck, check_cancelled
 from app.services.craftability_scorer import compute_craftability
 from app.services.layout_repair import (
     collect_layout_warnings,
@@ -23,19 +23,9 @@ from app.services.outline_optimizer import optimize_pieces_cut_outlines
 from app.services.tab_generator import add_tabs_to_pieces
 from app.services.unfold_repair import collect_unfold_warnings, unfold_with_auto_repair
 from app.services.zip_exporter import export_zip
-from app.services.pipeline_errors import JobCancelledError
 from app.utils.file_utils import build_storage_url
 
 ProgressCallback = Callable[[int, str], None]
-
-
-class CancelCheck(Protocol):
-    def __call__(self) -> bool: ...
-
-
-def _check_cancelled(cancel_check: CancelCheck | None) -> None:
-    if cancel_check is not None and cancel_check():
-        raise JobCancelledError("Processing cancelled.")
 
 
 def run_pipeline(
@@ -53,7 +43,7 @@ def run_pipeline(
     Writes processed mesh, SVG, and PDF to storage and returns metadata.
     """
     def report(progress: int, message: str) -> None:
-        _check_cancelled(cancel_check)
+        check_cancelled(cancel_check)
         if on_progress is not None:
             on_progress(progress, message)
 
@@ -73,6 +63,7 @@ def run_pipeline(
         settings.difficulty,
         dihedral=dihedral,
         block_export_on_failure=app_settings.block_export_on_unfold_overlap,
+        cancel_check=cancel_check,
     )
     pieces = unfold_result.pieces
     unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
@@ -91,6 +82,7 @@ def run_pipeline(
         pieces,
         settings.paper_size,
         target_height_mm=settings.target_height_mm,
+        cancel_check=cancel_check,
     )
     ensure_layout_exportable(layout_result)
     pages = layout_result.pages

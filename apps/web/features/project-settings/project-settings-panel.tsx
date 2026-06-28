@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cancelProcessJob, processModel } from "@/lib/api";
+import { applyTerminalProcessJob } from "@/features/studio/resume-process";
 import { beginJobPoll, cancelJobPoll } from "@/lib/job-poll-session";
 import {
   clearJobProgressTracking,
@@ -114,18 +115,20 @@ export function ProjectSettingsPanel() {
 
     cancelJobPoll("process");
     try {
-      await cancelProcessJob(activeProcessJobId);
+      const job = await cancelProcessJob(activeProcessJobId);
+      if (applyTerminalProcessJob(job)) {
+        return;
+      }
+
+      setActiveProcessJobId(null);
+      clearJobProgressTracking();
+      useStudioStore.getState().setStatus("uploaded");
+      addLog("Processing cancelled.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to cancel processing.";
       addLog(`Error: ${message}`);
-      return;
     }
-
-    setActiveProcessJobId(null);
-    clearJobProgressTracking();
-    useStudioStore.getState().setStatus("uploaded");
-    addLog("Processing cancelled.");
   };
 
   return (

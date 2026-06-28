@@ -190,11 +190,13 @@ export async function uploadModel(file: File): Promise<UploadModelResponse> {
 export async function startProcessModel(
   projectId: string,
   settings: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
 ): Promise<ProcessJobResponse> {
   const response = await fetch("/api/process-model", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ projectId, settings }),
+    signal: options?.signal,
   });
 
   const body = (await response.json().catch(() => ({}))) as ProcessJobResponse &
@@ -233,7 +235,9 @@ export async function processModel(
     signal?: AbortSignal;
   },
 ): Promise<ProcessModelResponse> {
-  const accepted = await startProcessModel(projectId, settings);
+  const accepted = await startProcessModel(projectId, settings, {
+    signal: options?.signal,
+  });
   const job = await pollProcessJob(accepted.jobId, {
     onProgress: options?.onProgress,
     signal: options?.signal,

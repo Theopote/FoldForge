@@ -83,6 +83,7 @@ def test_layout_with_repair_blocks_unplaced_pieces(monkeypatch: pytest.MonkeyPat
         paper_size: PaperSize,
         *,
         gap_mm: float = 8.0,
+        cancel_check=None,
     ) -> LayoutResult:
         return LayoutResult(pages=[], unplaced_pieces=list(pieces))
 

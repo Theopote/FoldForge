@@ -9,6 +9,7 @@ from shapely.strtree import STRtree
 
 from app.models.geometry import LayoutPage, PlacedPiece, UnfoldPiece
 from app.schemas.model import PaperSize
+from app.services.cancel import CancelCheck, check_cancelled
 from app.services.nfp_packing import nfp_placement_candidates
 from app.services.unfolder import (
     piece_bounds,
@@ -181,6 +182,7 @@ def layout_pieces(
     paper_size: PaperSize,
     *,
     gap_mm: float = DEFAULT_GAP_MM,
+    cancel_check: CancelCheck | None = None,
 ) -> LayoutResult:
     """
     Pack pieces using bottom-left nesting with Shapely collision detection.
@@ -205,6 +207,7 @@ def layout_pieces(
 
     unplaced_pieces: list[UnfoldPiece] = []
     for piece in sorted_pieces:
+        check_cancelled(cancel_check)
         placed = _place_piece_nesting(
             piece,
             pages,
@@ -214,6 +217,7 @@ def layout_pieces(
             page_width,
             page_height,
             gap_mm=gap_mm,
+            cancel_check=cancel_check,
         )
         if not placed:
             unplaced_pieces.append(piece)
@@ -236,10 +240,12 @@ def _place_piece_nesting(
     page_height: float,
     *,
     gap_mm: float,
+    cancel_check: CancelCheck | None = None,
 ) -> bool:
     for page in pages:
+        check_cancelled(cancel_check)
         placement = _find_placement_on_page(
-            piece, page, usable_box, usable_w, usable_h, gap_mm=gap_mm
+            piece, page, usable_box, usable_w, usable_h, gap_mm=gap_mm, cancel_check=cancel_check
         )
         if placement is not None:
             normalized, _rotation, x, y = placement
@@ -257,7 +263,13 @@ def _place_piece_nesting(
     )
     pages.append(new_page)
     placement = _find_placement_on_page(
-        piece, new_page, usable_box, usable_w, usable_h, gap_mm=gap_mm
+        piece,
+        new_page,
+        usable_box,
+        usable_w,
+        usable_h,
+        gap_mm=gap_mm,
+        cancel_check=cancel_check,
     )
     if placement is not None:
         normalized, _rotation, x, y = placement
@@ -279,6 +291,7 @@ def _find_placement_on_page(
     usable_h: float,
     *,
     gap_mm: float,
+    cancel_check: CancelCheck | None = None,
 ) -> tuple[UnfoldPiece, int, float, float] | None:
     placed_polys: list[Polygon] = []
     for placed in page.placed_pieces:
@@ -292,6 +305,7 @@ def _find_placement_on_page(
     best: tuple[float, UnfoldPiece, int, float, float] | None = None
 
     for rotation in range(4):
+        check_cancelled(cancel_check)
         normalized = _normalize_to_origin(rotate_piece(piece, rotation))
         min_x, min_y, max_x, max_y = piece_bounds(normalized, include_tabs=True)
         width = max_x - min_x
@@ -300,10 +314,14 @@ def _find_placement_on_page(
             continue
 
         trial_poly_norm = piece_to_shapely(normalized, include_tabs=True, gap_buffer=0.0)
-        nfp_candidates = nfp_placement_candidates(placed_polys, trial_poly_norm)
+        nfp_candidates = nfp_placement_candidates(
+            placed_polys, trial_poly_norm, cancel_check=cancel_check
+        )
         rotation_candidates = _candidates_for_piece(candidates, nfp_candidates)
 
-        for cx, cy in rotation_candidates:
+        for candidate_index, (cx, cy) in enumerate(rotation_candidates):
+            if candidate_index % 32 == 0:
+                check_cancelled(cancel_check)
             x = cx - min_x
             y = cy - min_y
             trial = translate_piece(normalized, x, y)

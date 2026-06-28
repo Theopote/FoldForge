@@ -7,6 +7,9 @@ from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
 
 
+from app.services.cancel import CancelCheck, check_cancelled
+
+
 def reflect_at_origin(polygon: Polygon) -> Polygon:
     """Reflect polygon through the origin (for Minkowski difference)."""
     reflected = scale(polygon, xfact=-1.0, yfact=-1.0, origin=(0.0, 0.0))
@@ -191,6 +194,7 @@ def nfp_placement_candidates(
     orbiting_polygon: Polygon,
     *,
     edge_step_mm: float = 6.0,
+    cancel_check: CancelCheck | None = None,
 ) -> list[tuple[float, float]]:
     """Generate candidate reference-point positions from decomposed NFP boundaries."""
     ref_x, ref_y = nfp_reference_point(orbiting_polygon)
@@ -199,6 +203,7 @@ def nfp_placement_candidates(
     candidates: set[tuple[float, float]] = set()
 
     for stationary in stationary_polygons:
+        check_cancelled(cancel_check)
         if stationary.is_empty:
             continue
 
@@ -216,11 +221,14 @@ def nfp_placement_candidates(
                 candidates.add((round(x, 2), round(y, 2)))
 
             for i in range(len(coords) - 1):
+                check_cancelled(cancel_check)
                 x0, y0 = coords[i]
                 x1, y1 = coords[i + 1]
                 length = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
                 steps = max(1, int(length / edge_step_mm))
                 for step in range(steps + 1):
+                    if step % 16 == 0:
+                        check_cancelled(cancel_check)
                     t = step / steps
                     candidates.add((
                         round(x0 + (x1 - x0) * t, 2),

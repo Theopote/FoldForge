@@ -88,10 +88,7 @@ async def cancel_process_job(job_id: str) -> ProcessJobResponse:
         raise HTTPException(status_code=404, detail="Process job not found.")
 
     if job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Job already {job.status.value}.",
-        )
+        return build_process_job_response(job)
 
     updated = process_job_store.cancel(job_id)
     if updated is None:

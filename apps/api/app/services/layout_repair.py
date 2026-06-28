@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from app.models.geometry import LayoutPage, UnfoldPiece
 from app.schemas.model import PaperSize
+from app.services.cancel import CancelCheck, check_cancelled
 from app.services.layout_engine import (
     detect_layout_issues,
     find_pieces_too_large_for_paper,
@@ -38,6 +39,7 @@ def layout_with_repair(
     paper_size: PaperSize,
     *,
     target_height_mm: float | None = None,
+    cancel_check: CancelCheck | None = None,
 ) -> LayoutRepairResult:
     """
     Pack pieces onto pages, retrying with wider gaps when overlaps are detected.
@@ -66,7 +68,8 @@ def layout_with_repair(
     last_issues = detect_layout_issues([])
 
     for attempt, gap_mm in enumerate(GAP_MM_SEQUENCE[:MAX_LAYOUT_REPAIR_ITERATIONS]):
-        layout = layout_pieces(pieces, paper_size, gap_mm=gap_mm)
+        check_cancelled(cancel_check)
+        layout = layout_pieces(pieces, paper_size, gap_mm=gap_mm, cancel_check=cancel_check)
         if layout.unplaced_pieces:
             labels = [piece.label or piece.id for piece in layout.unplaced_pieces]
             label_text = ", ".join(labels)

@@ -11,12 +11,14 @@ from app.services.layout_engine import (
     find_pieces_too_large_for_paper,
     piece_bounds,
 )
+from app.services.cancel import CancelCheck, check_cancelled
 
 
 def layout_pieces_row(
     pieces: list[UnfoldPiece],
     paper_size: PaperSize,
     gap_mm: float = 8.0,
+    cancel_check: CancelCheck | None = None,
 ) -> LayoutResult:
     """Place pieces left-to-right, top-to-bottom without NFP (test helper)."""
     if not pieces:
@@ -55,6 +57,7 @@ def layout_pieces_row(
             row_height = 0.0
 
     for piece in pieces:
+        check_cancelled(cancel_check)
         min_x, min_y, max_x, max_y = piece_bounds(piece, include_tabs=True)
         width = max_x - min_x
         height = max_y - min_y
