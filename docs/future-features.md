@@ -16,7 +16,7 @@ Product suggestions evaluated against current MVP scope. Items marked **Adopt** 
 
 ## Interactive SVG seam editing
 
-**Phase A + B + C adopted.**
+**Phase A + B + C + D adopted.**
 
 Shipped:
 
@@ -26,12 +26,7 @@ Shipped:
 4. **API:** `PATCH /api/projects/{id}/seams` → async seam reflow job; `GET` returns advisor + 3D positions.
 5. **3D sync:** selected seam edge highlighted on processed GLB; overlap pieces glow in SVG.
 6. **Advisor:** toggle preview hints, overlap list, ranked seam suggestions.
-
-Next (Phase D):
-
-1. Click-to-select edges directly in 3D view.
-2. Live overlap heatmap overlay per face.
-3. AI-assisted seam recommendations.
+7. **Phase D:** click-to-select seams in 3D view; per-face overlap heatmap on processed mesh; guidance panel + one-click **Apply** on suggestions.
 
 Existing pieces: `unfold_with_custom_seams`, `run_seam_reflow_pipeline`, `apply_seam_toggle`.
 

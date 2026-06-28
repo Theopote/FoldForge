@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileImage, FileText, Loader2, MousePointer2, Package, Palette } from "lucide-react";
+import { Download, FileImage, FileText, Flame, Loader2, MousePointer2, Package, Palette } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   UnfoldSvgPreview,
   type UnfoldPreviewLayer,
 } from "@/features/unfold-preview/unfold-svg-preview";
+import { useSeamManifest } from "@/features/unfold-preview/use-seam-manifest";
 import { useSeamReflow } from "@/features/unfold-preview/use-seam-reflow";
 import { useStudioStore } from "@/store/studio-store";
 
@@ -24,9 +25,17 @@ export function UnfoldPreviewPanel() {
     settings,
     exportRevision,
     exportedColorMode,
+    seamInspectorMode,
+    showOverlapHeatmap,
+    setSeamInspectorMode,
+    setShowOverlapHeatmap,
   } = useStudioStore();
   const [previewLayer, setPreviewLayer] = useState<UnfoldPreviewLayer>("both");
-  const [seamInspector, setSeamInspector] = useState(false);
+  const seamManifest = useSeamManifest(
+    projectId,
+    exportRevision,
+    seamInspectorMode && status === "ready",
+  );
   const { toggleSeam, undoSeam, canUndo, pending: seamPending, seamError } =
     useSeamReflow(projectId);
   const isProcessing = status === "processing" || seamPending;
@@ -53,25 +62,25 @@ export function UnfoldPreviewPanel() {
           <div className="flex flex-wrap gap-2 pt-1">
             <LayerToggle
               label="Both"
-              active={previewLayer === "both" && !seamInspector}
+              active={previewLayer === "both" && !seamInspectorMode}
               onClick={() => {
-                setSeamInspector(false);
+                setSeamInspectorMode(false);
                 setPreviewLayer("both");
               }}
             />
             <LayerToggle
               label="Baked"
-              active={previewLayer === "color" && !seamInspector}
+              active={previewLayer === "color" && !seamInspectorMode}
               onClick={() => {
-                setSeamInspector(false);
+                setSeamInspectorMode(false);
                 setPreviewLayer("color");
               }}
             />
             <LayerToggle
               label="Lines"
-              active={previewLayer === "lines" && !seamInspector}
+              active={previewLayer === "lines" && !seamInspectorMode}
               onClick={() => {
-                setSeamInspector(false);
+                setSeamInspectorMode(false);
                 setPreviewLayer("lines");
               }}
             />
@@ -81,10 +90,18 @@ export function UnfoldPreviewPanel() {
           <div className="flex flex-wrap gap-2 pt-1">
             <LayerToggle
               label="Seams"
-              active={seamInspector}
-              onClick={() => setSeamInspector((value) => !value)}
+              active={seamInspectorMode}
+              onClick={() => setSeamInspectorMode(!seamInspectorMode)}
               icon={MousePointer2}
             />
+            {seamInspectorMode && (
+              <LayerToggle
+                label="Heatmap"
+                active={showOverlapHeatmap}
+                onClick={() => setShowOverlapHeatmap(!showOverlapHeatmap)}
+                icon={Flame}
+              />
+            )}
           </div>
         )}
         {previewIsStale && (
@@ -121,10 +138,11 @@ export function UnfoldPreviewPanel() {
             <UnfoldSvgPreview
               url={unfoldSvgUrl}
               revision={exportRevision}
-              layer={seamInspector ? "lines" : previewLayer}
+              layer={seamInspectorMode ? "lines" : previewLayer}
               className="p-4"
-              seamInspector={seamInspector}
+              seamInspector={seamInspectorMode}
               projectId={projectId}
+              manifest={seamManifest}
               onToggleSeam={toggleSeam}
               onUndoSeam={undoSeam}
               canUndoSeam={canUndo}

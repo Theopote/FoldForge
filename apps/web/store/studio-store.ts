@@ -67,6 +67,8 @@ type StudioState = {
   jobMessage: string;
   selectedSeamMeshEdge: string | null;
   selectedSeamHighlight: SeamPosition3d | null;
+  seamInspectorMode: boolean;
+  showOverlapHeatmap: boolean;
   setSourceType: (sourceType: SourceType) => void;
   setUploadResult: (payload: {
     projectId: string;
@@ -111,6 +113,8 @@ type StudioState = {
     meshEdge: string | null;
     position3d: SeamPosition3d | null;
   }) => void;
+  setSeamInspectorMode: (enabled: boolean) => void;
+  setShowOverlapHeatmap: (enabled: boolean) => void;
   reset: () => void;
 };
 
@@ -144,6 +148,8 @@ const initialState = {
   jobMessage: "",
   selectedSeamMeshEdge: null,
   selectedSeamHighlight: null,
+  seamInspectorMode: false,
+  showOverlapHeatmap: false,
 };
 
 function applyGenerationReset() {
@@ -297,5 +303,8 @@ export const useStudioStore = create<StudioState>((set) => ({
     set({ jobPhase: "idle", jobProgress: 0, jobMessage: "" }),
   setSelectedSeamHighlight: ({ meshEdge, position3d }) =>
     set({ selectedSeamMeshEdge: meshEdge, selectedSeamHighlight: position3d }),
+  setSeamInspectorMode: (seamInspectorMode) =>
+    set({ seamInspectorMode, ...(seamInspectorMode ? {} : { showOverlapHeatmap: false }) }),
+  setShowOverlapHeatmap: (showOverlapHeatmap) => set({ showOverlapHeatmap }),
   reset: () => set(initialState),
 }));

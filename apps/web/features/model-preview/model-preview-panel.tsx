@@ -1,26 +1,33 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Box, Loader2 } from "lucide-react";
+import { Box, Flame, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModelViewer } from "@/features/model-preview/model-viewer";
+import { useSeamManifest } from "@/features/unfold-preview/use-seam-manifest";
 import type { ModelMeshStats } from "@/lib/geometry-stats";
 import { useStudioStore } from "@/store/studio-store";
 
 export function ModelPreviewPanel() {
   const {
+    projectId,
     sourceFileUrl,
     processedModelUrl,
     sourceType,
     aiProvider,
     status,
+    exportRevision,
     meshStats,
     stats,
     craftability,
     selectedSeamMeshEdge,
     selectedSeamHighlight,
+    seamInspectorMode,
+    showOverlapHeatmap,
+    setShowOverlapHeatmap,
+    setSelectedSeamHighlight,
     setMeshStats,
     addLog,
     setError,
@@ -29,6 +36,12 @@ export function ModelPreviewPanel() {
 
   const previewUrl =
     status === "ready" && processedModelUrl ? processedModelUrl : sourceFileUrl;
+
+  const seamManifest = useSeamManifest(
+    projectId,
+    exportRevision,
+    seamInspectorMode && status === "ready",
+  );
 
   useEffect(() => {
     if (previewUrl) {
@@ -56,6 +69,21 @@ export function ModelPreviewPanel() {
     [addLog, setError],
   );
 
+  const handleSeamSelect = useCallback(
+    (meshEdge: string) => {
+      const edge = seamManifest?.edges[meshEdge];
+      setSelectedSeamHighlight({
+        meshEdge,
+        position3d: edge?.position3d ?? null,
+      });
+      addLog(`Selected seam edge ${meshEdge} from 3D view`);
+    },
+    [seamManifest, setSelectedSeamHighlight, addLog],
+  );
+
+  const faceHeat = seamManifest?.advisor?.faceHeat ?? null;
+  const hasHeatmap = Boolean(faceHeat && Object.keys(faceHeat).length > 0);
+
   return (
     <Card className="flex h-full min-h-[420px] flex-col border-border/70 shadow-none">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -63,13 +91,23 @@ export function ModelPreviewPanel() {
           <Box className="h-4 w-4 text-primary" />
           3D Preview
         </CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Badge variant="outline" className="text-xs capitalize">
             {sourceType.replace(/_/g, " ")}
           </Badge>
           {aiProvider && (
             <Badge variant="outline" className="text-xs">
               AI: {aiProvider}
+            </Badge>
+          )}
+          {seamInspectorMode && (
+            <Badge
+              variant={showOverlapHeatmap ? "default" : "outline"}
+              className="cursor-pointer gap-1 text-xs"
+              onClick={() => setShowOverlapHeatmap(!showOverlapHeatmap)}
+            >
+              <Flame className="h-3 w-3" />
+              Heatmap
             </Badge>
           )}
           {selectedSeamMeshEdge && (
@@ -92,11 +130,24 @@ export function ModelPreviewPanel() {
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               )}
+              {seamInspectorMode && (
+                <p className="absolute left-3 right-3 top-3 z-10 rounded-lg border border-border/70 bg-background/90 px-3 py-1.5 text-center text-[11px] text-muted-foreground backdrop-blur-sm">
+                  {hasHeatmap && showOverlapHeatmap
+                    ? "Orange faces show unfold overlap intensity · click an edge to inspect"
+                    : "Click a seam edge in 3D or the 2D unfold to inspect and edit"}
+                </p>
+              )}
               <ModelViewer
                 url={previewUrl}
                 onLoaded={handleLoaded}
                 onError={handleError}
                 seamHighlight={selectedSeamHighlight}
+                seamEdges={seamInspectorMode ? (seamManifest?.edges ?? null) : null}
+                seamPickEnabled={seamInspectorMode && Boolean(seamManifest?.edges)}
+                selectedSeamMeshEdge={selectedSeamMeshEdge}
+                onSeamSelect={handleSeamSelect}
+                faceHeat={faceHeat}
+                showHeatmap={showOverlapHeatmap && hasHeatmap}
               />
             </>
           ) : (

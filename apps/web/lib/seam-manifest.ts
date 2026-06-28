@@ -33,12 +33,15 @@ export type SeamSuggestion = {
   action: "add" | "remove";
   score: number;
   label: string;
+  reason?: string;
 };
 
 export type SeamAdvisor = {
   overlapPieces: string[];
   suggestions: SeamSuggestion[];
   edgeHints: Record<string, SeamEdgeHint>;
+  faceHeat?: Record<string, number>;
+  guidance?: string[];
 };
 
 export type SeamManifest = {
@@ -126,14 +129,16 @@ export function parseSeamManifest(raw: unknown): SeamManifest | null {
           .map((item) => {
             if (!item || typeof item !== "object") return null;
             const s = item as Record<string, unknown>;
-            return {
+            const suggestion: SeamSuggestion = {
               meshEdge: String(s.meshEdge ?? ""),
               action: s.action === "remove" ? "remove" : "add",
               score: Number(s.score ?? 0),
               label: String(s.label ?? ""),
-            } satisfies SeamSuggestion;
+              reason: s.reason ? String(s.reason) : undefined,
+            };
+            return suggestion.meshEdge.length > 0 ? suggestion : null;
           })
-          .filter((item): item is SeamSuggestion => item !== null && item.meshEdge.length > 0)
+          .filter((item): item is SeamSuggestion => item !== null)
       : [];
     const edgeHints: Record<string, SeamEdgeHint> = {};
     if (rawAdvisor.edgeHints && typeof rawAdvisor.edgeHints === "object") {
@@ -162,6 +167,17 @@ export function parseSeamManifest(raw: unknown): SeamManifest | null {
         : [],
       suggestions,
       edgeHints,
+      faceHeat:
+        rawAdvisor.faceHeat && typeof rawAdvisor.faceHeat === "object"
+          ? Object.fromEntries(
+              Object.entries(rawAdvisor.faceHeat as Record<string, unknown>).map(
+                ([key, value]) => [key, Number(value)],
+              ),
+            )
+          : undefined,
+      guidance: Array.isArray(rawAdvisor.guidance)
+        ? rawAdvisor.guidance.map(String)
+        : undefined,
     };
   }
 

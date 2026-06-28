@@ -17,7 +17,12 @@ from app.services.seam_generator import (
     split_into_patches,
 )
 from app.services.seam_store import format_mesh_edge
-from app.services.unfolder import score_seams_by_overlap, unfold_mesh, compute_unfold_vertex_map
+from app.services.unfolder import (
+    compute_unfold_vertex_map,
+    find_overlapping_face_pairs,
+    score_seams_by_overlap,
+    unfold_mesh,
+)
 
 
 def build_seam_advisor(
@@ -33,12 +38,97 @@ def build_seam_advisor(
     )
     suggestions = _rank_seam_suggestions(mesh, pieces, seams, difficulty, dihedral)
     edge_hints = _build_edge_toggle_hints(mesh, seams, pieces, difficulty, dihedral)
+    face_heat = build_face_overlap_heat(mesh, pieces, dihedral)
+    guidance = build_seam_guidance(
+        pieces,
+        seams,
+        overlap_pieces,
+        suggestions,
+        edge_hints,
+    )
 
     return {
         "overlapPieces": overlap_pieces,
         "suggestions": suggestions,
         "edgeHints": edge_hints,
+        "faceHeat": face_heat,
+        "guidance": guidance,
     }
+
+
+def build_face_overlap_heat(
+    mesh: trimesh.Trimesh,
+    pieces: list[UnfoldPiece],
+    dihedral: EdgeDihedralData,
+) -> dict[str, float]:
+    """Per-face overlap intensity (0–1) for 3D heatmap overlay."""
+    raw: dict[int, float] = {}
+
+    for piece in pieces:
+        if not piece.has_overlap:
+            continue
+        vertex_2d, _ = compute_unfold_vertex_map(mesh, piece.face_ids, dihedral)
+        for f1, f2, area in find_overlapping_face_pairs(
+            mesh, piece.face_ids, vertex_2d
+        ):
+            raw[f1] = raw.get(f1, 0.0) + area
+            raw[f2] = raw.get(f2, 0.0) + area
+
+    if not raw:
+        return {}
+
+    peak = max(raw.values())
+    if peak <= 0:
+        return {}
+
+    return {str(face_idx): round(value / peak, 3) for face_idx, value in raw.items()}
+
+
+def build_seam_guidance(
+    pieces: list[UnfoldPiece],
+    seams: set[tuple[int, int]],
+    overlap_pieces: list[str],
+    suggestions: list[dict[str, Any]],
+    edge_hints: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Human-readable craft hints for Studio seam advisor panel."""
+    lines: list[str] = []
+
+    if overlap_pieces:
+        labels = ", ".join(overlap_pieces)
+        lines.append(
+            f"{len(overlap_pieces)} piece(s) overlap when unfolded ({labels}). "
+            "Add cut seams along sharp interior edges to split those patches."
+        )
+    else:
+        lines.append(
+            "No unfold overlap detected. Merge adjacent cut seams only when "
+            "pieces should stay connected in the flat layout."
+        )
+
+    if suggestions:
+        top = suggestions[0]
+        lines.append(
+            f"Recommended next edit: {top['label']} — edge {top['meshEdge']}."
+        )
+
+    invalid = sum(
+        1 for hint in edge_hints.values() if not hint.get("toggleValid", True)
+    )
+    if invalid:
+        lines.append(
+            f"{invalid} seam edge(s) cannot be toggled without breaking mesh "
+            "connectivity — try a neighboring sharp edge instead."
+        )
+
+    fold_count = sum(1 for piece in pieces for fold in piece.fold_lines if fold.mesh_edge)
+    cut_count = len(seams)
+    lines.append(
+        f"Current layout: {len(pieces)} piece(s), {cut_count} cut seam(s), "
+        f"{fold_count} visible fold line(s)."
+    )
+
+    return lines[:4]
 
 
 def _rank_seam_suggestions(
@@ -86,6 +176,7 @@ def _rank_seam_suggestions(
                 "action": action,
                 "score": round(score, 2),
                 "label": label,
+                "reason": _suggestion_reason(edge, action, score, dihedral),
             }
         )
     return suggestions
@@ -100,6 +191,22 @@ def _suggestion_label(
     if action == "add":
         return f"Split along sharp edge ({degrees:.0f}°) to reduce overlap"
     return f"Merge across edge ({degrees:.0f}°)"
+
+
+def _suggestion_reason(
+    edge: tuple[int, int],
+    action: str,
+    score: float,
+    dihedral: EdgeDihedralData,
+) -> str:
+    degrees = math.degrees(dihedral.unsigned.get(edge, 0.0))
+    if action == "add" and score >= 10:
+        return "High overlap relief — splitting this patch should flatten cleanly."
+    if action == "add" and degrees >= 45:
+        return "Sharp dihedral — natural place to separate overlapping regions."
+    if action == "add":
+        return "Moderate score — try this seam if overlap persists after sharper cuts."
+    return "Low-angle edge — merging may simplify assembly without new overlap."
 
 
 def _build_edge_toggle_hints(

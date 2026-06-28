@@ -7,8 +7,6 @@ import { unfoldPreviewUrl } from "@/lib/unfold-preview-url";
 import {
   formatSeamTooltip,
   readSeamLineMetadata,
-  parseSeamManifest,
-  seamManifestPreviewUrl,
   type SeamManifest,
   type SeamSuggestion,
 } from "@/lib/seam-manifest";
@@ -70,6 +68,7 @@ export function UnfoldSvgPreview({
   className = "",
   seamInspector = false,
   projectId = null,
+  manifest = null,
   onToggleSeam,
   onUndoSeam,
   canUndoSeam = false,
@@ -82,6 +81,7 @@ export function UnfoldSvgPreview({
   className?: string;
   seamInspector?: boolean;
   projectId?: string | null;
+  manifest?: SeamManifest | null;
   onToggleSeam?: (meshEdge: string) => void | Promise<void>;
   onUndoSeam?: () => void | Promise<void>;
   canUndoSeam?: boolean;
@@ -92,15 +92,65 @@ export function UnfoldSvgPreview({
   const setSelectedSeamHighlight = useStudioStore(
     (state) => state.setSelectedSeamHighlight,
   );
+  const selectedSeamMeshEdge = useStudioStore(
+    (state) => state.selectedSeamMeshEdge,
+  );
   const [markup, setMarkup] = useState<string | null>(null);
-  const [manifest, setManifest] = useState<SeamManifest | null>(null);
   const [selectedSeam, setSelectedSeam] = useState<SelectedSeam | null>(null);
   const [error, setError] = useState(false);
+
+  const selectSeam = useCallback(
+    (
+      meshEdge: string,
+      attrs: {
+        pieceLabel?: string | null;
+        edgeKind?: string | null;
+        foldType?: string | null;
+      },
+    ) => {
+      const manifestEdge = manifest?.edges[meshEdge];
+      const edgeHint = manifest?.advisor?.edgeHints[meshEdge];
+
+      hostRef.current
+        ?.querySelectorAll(".seam-edge.seam-selected")
+        .forEach((node) => node.classList.remove("seam-selected"));
+
+      const [v0, v1] = meshEdge.split(",");
+      const svgEdge =
+        hostRef.current?.querySelector<SVGLineElement>(
+          `.seam-edge[id$="-${v0}-${v1}"], .seam-edge[id$="-${v1}-${v0}"]`,
+        ) ?? null;
+      svgEdge?.classList.add("seam-selected");
+
+      setSelectedSeamHighlight({
+        meshEdge,
+        position3d: manifestEdge?.position3d ?? null,
+      });
+
+      setSelectedSeam({
+        meshEdge,
+        pieceLabel: attrs.pieceLabel ?? manifestEdge?.pieceLabel ?? "",
+        edgeKind: attrs.edgeKind ?? manifestEdge?.kind ?? "cut",
+        foldType: attrs.foldType ?? manifestEdge?.foldType ?? null,
+        tooltip: formatSeamTooltip(
+          meshEdge,
+          {
+            pieceLabel: attrs.pieceLabel ?? manifestEdge?.pieceLabel,
+            edgeKind: attrs.edgeKind ?? manifestEdge?.kind,
+            foldType: attrs.foldType ?? manifestEdge?.foldType,
+          },
+          manifestEdge,
+          edgeHint,
+        ),
+        suggestions: manifest?.advisor?.suggestions ?? [],
+      });
+    },
+    [manifest, setSelectedSeamHighlight],
+  );
 
   useEffect(() => {
     let cancelled = false;
     setMarkup(null);
-    setManifest(null);
     setSelectedSeam(null);
     setError(false);
 
@@ -122,23 +172,33 @@ export function UnfoldSvgPreview({
         }
       });
 
-    if (seamInspector && projectId) {
-      void fetch(seamManifestPreviewUrl(projectId, revision))
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload) => {
-          if (!cancelled && payload) {
-            setManifest(parseSeamManifest(payload));
-          }
-        })
-        .catch(() => {
-          /* manifest is optional for older exports */
-        });
-    }
-
     return () => {
       cancelled = true;
     };
-  }, [url, revision, seamInspector, projectId]);
+  }, [url, revision]);
+
+  useEffect(() => {
+    if (!seamInspector) {
+      setSelectedSeam(null);
+    }
+  }, [seamInspector]);
+
+  useEffect(() => {
+    if (!seamInspector || !selectedSeamMeshEdge || !manifest || !markup) {
+      return;
+    }
+    if (selectedSeam?.meshEdge === selectedSeamMeshEdge) {
+      return;
+    }
+    selectSeam(selectedSeamMeshEdge, {});
+  }, [
+    seamInspector,
+    selectedSeamMeshEdge,
+    manifest,
+    markup,
+    selectSeam,
+    selectedSeam?.meshEdge,
+  ]);
 
   const handleSeamClick = useCallback(
     (event: Event) => {
@@ -148,38 +208,13 @@ export function UnfoldSvgPreview({
         return;
       }
 
-      hostRef.current
-        ?.querySelectorAll(".seam-edge.seam-selected")
-        .forEach((node) => node.classList.remove("seam-selected"));
-      target.classList.add("seam-selected");
-
-      const manifestEdge = manifest?.edges[meta.meshEdge];
-      const edgeHint = manifest?.advisor?.edgeHints[meta.meshEdge];
-
-      setSelectedSeamHighlight({
-        meshEdge: meta.meshEdge,
-        position3d: manifestEdge?.position3d ?? null,
-      });
-
-      setSelectedSeam({
-        meshEdge: meta.meshEdge,
+      selectSeam(meta.meshEdge, {
         pieceLabel: meta.pieceLabel,
         edgeKind: meta.edgeKind,
         foldType: meta.foldType,
-        tooltip: formatSeamTooltip(
-          meta.meshEdge,
-          {
-            pieceLabel: meta.pieceLabel,
-            edgeKind: meta.edgeKind,
-            foldType: meta.foldType,
-          },
-          manifestEdge,
-          edgeHint,
-        ),
-        suggestions: manifest?.advisor?.suggestions ?? [],
       });
     },
-    [manifest, setSelectedSeamHighlight],
+    [selectSeam],
   );
 
   useEffect(() => {
@@ -266,15 +301,33 @@ export function UnfoldSvgPreview({
             {selectedSeam.suggestions.length > 0 && (
               <div className="mt-3 border-t border-border pt-2">
                 <p className="font-medium text-foreground">Suggested seams</p>
-                <ul className="mt-1 space-y-1 text-muted-foreground">
+                <ul className="mt-1 space-y-2 text-muted-foreground">
                   {selectedSeam.suggestions.slice(0, 3).map((item) => (
-                    <li key={item.meshEdge}>
-                      {item.label} ({item.meshEdge})
-                    </li>
+                    <SuggestionRow
+                      key={item.meshEdge}
+                      item={item}
+                      disabled={
+                        seamReflowPending ||
+                        !onToggleSeam ||
+                        manifest?.advisor?.edgeHints[item.meshEdge]?.toggleValid ===
+                          false
+                      }
+                      onApply={() => void onToggleSeam?.(item.meshEdge)}
+                    />
                   ))}
                 </ul>
               </div>
             )}
+            {manifest?.advisor?.guidance?.length ? (
+              <div className="mt-3 border-t border-border pt-2">
+                <p className="font-medium text-foreground">Seam advisor</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4 text-muted-foreground">
+                  {manifest.advisor.guidance.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {manifest?.advisor?.overlapPieces.length ? (
               <p className="mt-2 text-amber-700">
                 Overlapping pieces: {manifest.advisor.overlapPieces.join(", ")}
@@ -284,10 +337,33 @@ export function UnfoldSvgPreview({
         )}
         {seamInspector && !selectedSeam && (
           <p className="absolute bottom-3 left-3 right-3 rounded-xl border border-dashed border-border bg-background/90 px-3 py-2 text-center text-xs text-muted-foreground backdrop-blur-sm">
-            Click a cut edge or fold line to inspect seam geometry.
+            Click a cut edge or fold line in 2D or 3D to inspect seam geometry.
           </p>
         )}
       </div>
     </>
+  );
+}
+
+function SuggestionRow({
+  item,
+  disabled,
+  onApply,
+}: {
+  item: SeamSuggestion;
+  disabled: boolean;
+  onApply: () => void;
+}) {
+  return (
+    <li className="rounded-lg border border-border/70 bg-muted/20 p-2">
+      <p className="text-foreground">{item.label}</p>
+      {item.reason && <p className="mt-0.5 text-[11px]">{item.reason}</p>}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-[11px]">{item.meshEdge}</span>
+        <Button size="sm" variant="secondary" disabled={disabled} onClick={onApply}>
+          Apply
+        </Button>
+      </div>
+    </li>
   );
 }
