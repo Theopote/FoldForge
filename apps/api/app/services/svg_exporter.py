@@ -311,6 +311,21 @@ def _draw_seam_hit_targets(
     return seams_layer
 
 
+def _seam_line_id(
+    edge_kind: str,
+    piece_label: str,
+    mesh_edge: tuple[int, int] | None,
+    fold_type: str | None = None,
+) -> str:
+    if mesh_edge is None:
+        return f"seam-{edge_kind}-{piece_label}-unknown"
+    v0, v1 = mesh_edge
+    base = f"seam-{edge_kind}-{piece_label}-{v0}-{v1}"
+    if fold_type:
+        return f"{base}-{fold_type}"
+    return base
+
+
 def _add_seam_hit_line(
     drawing: svgwrite.Drawing,
     group: svgwrite.container.Group,
@@ -321,6 +336,13 @@ def _add_seam_hit_line(
     class_name: str,
     attrs: dict[str, str],
 ) -> None:
+    mesh_edge_raw = attrs.get("data-mesh-edge", "")
+    mesh_edge: tuple[int, int] | None = None
+    if mesh_edge_raw:
+        parts = mesh_edge_raw.split(",")
+        if len(parts) == 2:
+            mesh_edge = (int(parts[0]), int(parts[1]))
+
     line = drawing.line(
         start=start,
         end=end,
@@ -328,17 +350,11 @@ def _add_seam_hit_line(
         stroke_width=stroke_width,
         stroke_opacity=0,
         class_=class_name,
-        id=attrs.get("data-line-id"),
-    )
-    title = "|".join(
-        [
-            attrs.get("data-edge-kind", ""),
-            attrs.get("data-piece-id", ""),
+        id=_seam_line_id(
+            attrs.get("data-edge-kind", "cut"),
             attrs.get("data-piece-label", ""),
-            attrs.get("data-mesh-edge", ""),
-            attrs.get("data-line-id", ""),
-            attrs.get("data-fold-type", ""),
-        ]
+            mesh_edge,
+            attrs.get("data-fold-type") or None,
+        ),
     )
-    line.add(drawing.title(title))
     group.add(line)

@@ -30,6 +30,7 @@ def test_export_files_from_cube_pipeline(run_pipeline_sync, fast_layout, test_en
     assert "Scale check" in svg_text
     assert "Legend" in svg_text
     assert 'stroke-dasharray="2,1"' in svg_text or "stroke-dasharray" in svg_text
+    assert 'class="layer-seams"' in svg_text
 
     import zipfile
 

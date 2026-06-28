@@ -86,6 +86,28 @@ export function normalizeMeshEdgeKey(raw: string | null | undefined): string | n
   return a <= b ? `${a},${b}` : `${b},${a}`;
 }
 
+export function parseSeamLineId(id: string | null | undefined): {
+  edgeKind: string;
+  pieceLabel: string;
+  meshEdge: string | null;
+  foldType: string | null;
+} | null {
+  if (!id) {
+    return null;
+  }
+  const match = /^seam-(cut|fold)-([A-Za-z0-9]+)-(\d+)-(\d+)(?:-(mountain|valley))?$/.exec(id);
+  if (!match) {
+    return null;
+  }
+  const [, edgeKind, pieceLabel, v0, v1, foldType] = match;
+  return {
+    edgeKind,
+    pieceLabel,
+    meshEdge: normalizeMeshEdgeKey(`${v0},${v1}`),
+    foldType: foldType ?? null,
+  };
+}
+
 export function parseSeamLineTitle(title: string | null | undefined): {
   edgeKind: string;
   pieceId: string;
@@ -119,6 +141,18 @@ export function readSeamLineMetadata(line: Element): {
   lineId: string;
   foldType: string | null;
 } {
+  const fromId = parseSeamLineId(line.id);
+  if (fromId?.meshEdge) {
+    return {
+      edgeKind: fromId.edgeKind,
+      pieceId: "",
+      pieceLabel: fromId.pieceLabel,
+      meshEdge: fromId.meshEdge,
+      lineId: line.id,
+      foldType: fromId.foldType,
+    };
+  }
+
   const titleNode = line.querySelector("title");
   const fromTitle = parseSeamLineTitle(titleNode?.textContent);
   if (fromTitle) {

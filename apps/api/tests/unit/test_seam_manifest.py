@@ -86,7 +86,7 @@ def test_export_svg_includes_seam_hit_target_layer(tmp_path: Path) -> None:
     content = svg_path.read_text(encoding="utf-8")
     assert 'class="layer-seams"' in content
     assert 'class="seam-edge seam-cut"' in content
-    assert "cut|piece-a|A|0,1|cut-a" in content
+    assert 'id="seam-cut-A-0-1"' in content
     assert 'class="seam-edge seam-fold"' in content
 
 
