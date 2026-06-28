@@ -4,8 +4,9 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.models.geometry import LayoutPage, UnfoldPiece
 from app.schemas.model import ProjectSettings
-from app.services.instruction_generator import generate_instructions
+from app.services.instruction_export import export_instruction_files
 
 
 def export_zip(
@@ -15,6 +16,9 @@ def export_zip(
     stats: dict[str, int | str],
     warnings: list[str],
     settings: ProjectSettings | None = None,
+    *,
+    pieces: list[UnfoldPiece] | None = None,
+    pages: list[LayoutPage] | None = None,
 ) -> Path:
     """
     Create a ZIP archive containing templates, processed model, and instructions.
@@ -23,11 +27,26 @@ def export_zip(
     """
     settings_obj = settings or ProjectSettings()
     readme = _build_readme(project_name, stats, warnings)
-    instructions = generate_instructions(project_name, settings_obj, stats, warnings)
+    project_id = output_path.stem
+    txt_path, pdf_path, steps_svg_path = export_instruction_files(
+        output_path.parent,
+        project_id,
+        project_name,
+        settings_obj,
+        stats,
+        warnings,
+        pieces=pieces,
+        pages=pages,
+    )
+    instructions_txt = txt_path.read_text(encoding="utf-8")
+    instructions_pdf = pdf_path.read_bytes()
 
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("README.txt", readme)
-        archive.writestr("instructions.txt", instructions)
+        archive.writestr("instructions.txt", instructions_txt)
+        archive.writestr("instructions.pdf", instructions_pdf)
+        if steps_svg_path is not None and steps_svg_path.exists():
+            archive.write(steps_svg_path, arcname="assembly-steps.svg")
 
         for entry_name, file_path in files.items():
             if file_path.exists():
@@ -49,10 +68,12 @@ def _build_readme(
         f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
         "",
         "Contents:",
-        "  unfold.pdf   — Print this file (100% scale, no fit-to-page)",
-        "  unfold.svg   — Vector template for editing",
-        "  instructions.txt — Detailed print & assembly guide",
-        "  model.glb    — Processed low-poly reference model",
+        "  unfold.pdf        — Print this file (100% scale, no fit-to-page)",
+        "  unfold.svg        — Vector template for editing",
+        "  instructions.pdf  — Detailed print & assembly guide (PDF)",
+        "  instructions.txt  — Detailed print & assembly guide (text)",
+        "  assembly-steps.svg — Step-by-step assembly illustrations",
+        "  model.glb         — Processed low-poly reference model",
         "",
         "Stats:",
         f"  Faces:   {stats.get('faces', '—')}",

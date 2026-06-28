@@ -37,9 +37,12 @@ def test_export_files_from_cube_pipeline(run_pipeline_sync, fast_layout, test_en
         names = archive.namelist()
         assert "README.txt" in names
         assert "instructions.txt" in names
+        assert "instructions.pdf" in names
         instructions = archive.read("instructions.txt").decode("utf-8")
         assert "Print settings" in instructions
         assert "50 mm scale check" in instructions
+        assert "Piece inventory" in instructions
+        assert archive.read("instructions.pdf")[:4] == b"%PDF"
 
     assert result.craftability_score >= 0
     assert result.craftability_score <= 100

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiAuthHeaders, withStorageAuth } from "@/lib/api-auth";
+import { instructionExportUrls } from "@/lib/instruction-urls";
 import type { CraftabilityScore } from "@/types";
 
 type ProjectDetail = {
@@ -78,6 +79,9 @@ export default function ProjectDetailPage({
     );
   }
 
+  const instructionUrls =
+    project.status === "ready" ? instructionExportUrls(project.id) : null;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <Button asChild variant="ghost" size="sm" className="mb-4">
@@ -126,6 +130,22 @@ export default function ProjectDetailPage({
                   Full Kit (ZIP)
                 </a>
               </Button>
+            )}
+            {instructionUrls && (
+              <>
+                <Button variant="outline" className="w-full justify-start" asChild>
+                  <a href={instructionUrls.pdfAuth} download>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Assembly Guide (PDF)
+                  </a>
+                </Button>
+                <Button variant="outline" className="w-full justify-start" asChild>
+                  <a href={instructionUrls.txtAuth} download>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Assembly Guide (TXT)
+                  </a>
+                </Button>
+              </>
             )}
             {project.status !== "ready" && (
               <p className="text-sm text-muted-foreground">

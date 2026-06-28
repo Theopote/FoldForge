@@ -185,6 +185,8 @@ def run_pipeline(
         },
         warnings=craft_warnings,
         settings=settings,
+        pieces=pieces,
+        pages=pages,
     )
 
     difficulty_score = _difficulty_score(len(mesh.faces), len(pieces), len(pages))

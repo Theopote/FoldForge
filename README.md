@@ -116,7 +116,7 @@ Planned improvements (SSE job stream, interactive seam editor, texture baking) a
 | Text → 3D | **Experimental** | Requires configured AI provider (`AI_PROVIDER`, API keys) |
 | Image → 3D | **Experimental** | Same as text; quality varies by provider |
 
-Exports: **PDF** (with 50 mm scale check + legend), **SVG**, **ZIP** (includes `README.txt` and `instructions.txt`).
+Exports: **PDF** (with 50 mm scale check + legend), **SVG**, **ZIP** (includes `README.txt`, `instructions.txt`, and `instructions.pdf` with piece inventory and tab pairings).
 
 Projects and async jobs are persisted in **SQLite** (`storage/foldforge.db`) so a backend restart does not lose project metadata. The Studio UI loads project state from the API on open; the browser only remembers the last project id (`localStorage` + optional `/studio?project=` URL).
 

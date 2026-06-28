@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { CraftabilityCard } from "@/features/craftability/craftability-card";
+import { InstructionsPreviewPanel } from "@/features/instructions/instructions-preview-panel";
 import { ProcessingLogPanel } from "@/features/export-panel/processing-log-panel";
 import { ModelPreviewPanel } from "@/features/model-preview/model-preview-panel";
 import { CreateSourcePanel } from "@/features/model-upload/create-source-panel";
@@ -137,7 +138,8 @@ export function StudioWorkspace() {
         </section>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 space-y-6">
+        <InstructionsPreviewPanel />
         <ProcessingLogPanel />
       </div>
     </>
