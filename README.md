@@ -58,9 +58,13 @@ cp apps/web/.env.local.example apps/web/.env.local
 
 **Option A — both at once (from repo root):**
 
+Activate the API virtualenv first (step 1), then:
+
 ```bash
 npm run dev
 ```
+
+`dev:api` uses `python -m uvicorn` (same as option B), so the shell must resolve `python` to your activated `apps/api/.venv`.
 
 **Option B — separately:**
 
