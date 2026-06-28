@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS process_jobs (
     project_id TEXT NOT NULL,
     data TEXT NOT NULL,
     status TEXT NOT NULL,
+    locked_by TEXT,
+    locked_until TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id)
@@ -58,9 +62,14 @@ CREATE TABLE IF NOT EXISTS process_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_process_jobs_project_id
     ON process_jobs(project_id);
+"""
 
+_PROCESS_JOB_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_process_jobs_status
     ON process_jobs(status);
+
+CREATE INDEX IF NOT EXISTS idx_process_jobs_locked_until
+    ON process_jobs(locked_until);
 """
 
 _PROJECT_INDEXES = """
@@ -84,6 +93,13 @@ _PROJECT_COLUMN_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("settings_json", "TEXT NOT NULL DEFAULT '{}'"),
     ("stats_json", "TEXT"),
     ("craftability_json", "TEXT"),
+)
+
+_PROCESS_JOB_COLUMN_MIGRATIONS: tuple[tuple[str, str], ...] = (
+    ("locked_by", "TEXT"),
+    ("locked_until", "TEXT"),
+    ("attempts", "INTEGER NOT NULL DEFAULT 0"),
+    ("last_error", "TEXT"),
 )
 
 
@@ -117,7 +133,9 @@ class Database:
         with self.connection() as conn:
             conn.executescript(_SCHEMA)
             self._migrate_projects_table(conn)
+            self._migrate_process_jobs_table(conn)
             conn.executescript(_PROJECT_INDEXES)
+            conn.executescript(_PROCESS_JOB_INDEXES)
 
     def _migrate_projects_table(self, conn: sqlite3.Connection) -> None:
         """Add indexed project columns and backfill from legacy JSON snapshots."""
@@ -176,6 +194,17 @@ class Database:
                     row["id"],
                 ),
             )
+
+    def _migrate_process_jobs_table(self, conn: sqlite3.Connection) -> None:
+        """Add lease columns for multi-worker claim/recovery."""
+        existing = {
+            row["name"] for row in conn.execute("PRAGMA table_info(process_jobs)")
+        }
+        for column_name, column_def in _PROCESS_JOB_COLUMN_MIGRATIONS:
+            if column_name not in existing:
+                conn.execute(
+                    f"ALTER TABLE process_jobs ADD COLUMN {column_name} {column_def}"
+                )
 
 
 database = Database(settings.database_path)

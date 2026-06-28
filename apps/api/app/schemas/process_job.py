@@ -28,6 +28,10 @@ class ProcessJob(BaseModel):
     result_status: ProjectStatus | None = Field(alias="resultStatus", default=None)
     stats: ProcessStats | None = None
     craftability: CraftabilityScore | None = None
+    locked_by: str | None = Field(alias="lockedBy", default=None)
+    locked_until: datetime | None = Field(alias="lockedUntil", default=None)
+    attempts: int = 0
+    last_error: str | None = Field(alias="lastError", default=None)
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
 

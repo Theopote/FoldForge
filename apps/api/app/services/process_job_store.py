@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.db.database import database
 from app.schemas.job import JobStatus
 from app.schemas.process_job import ProcessJob
+
+_INCOMPLETE_STATUSES = (JobStatus.QUEUED.value, JobStatus.RUNNING.value)
 
 
 class ProcessJobStore:
@@ -55,6 +57,133 @@ class ProcessJobStore:
             ).fetchall()
         return [ProcessJob.model_validate(json.loads(row["data"])) for row in rows]
 
+    def list_claimable(self) -> list[ProcessJob]:
+        """Return queued/running jobs with no active lease (for recovery)."""
+        now = _utc_now_iso()
+        placeholders = ", ".join("?" for _ in _INCOMPLETE_STATUSES)
+        with database.connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT data FROM process_jobs
+                WHERE status IN ({placeholders})
+                  AND (locked_until IS NULL OR locked_until <= ?)
+                ORDER BY created_at ASC
+                """,
+                (*_INCOMPLETE_STATUSES, now),
+            ).fetchall()
+        return [ProcessJob.model_validate(json.loads(row["data"])) for row in rows]
+
+    def count_queued(self) -> int:
+        """Count jobs waiting for a worker (queued with no active lease)."""
+        now = _utc_now_iso()
+        with database.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS count FROM process_jobs
+                WHERE status = ?
+                  AND (locked_until IS NULL OR locked_until <= ?)
+                """,
+                (JobStatus.QUEUED.value, now),
+            ).fetchone()
+        return int(row["count"])
+
+    def try_acquire_lock(
+        self,
+        job_id: str,
+        worker_id: str,
+        lease_sec: int,
+    ) -> ProcessJob | None:
+        """Atomically claim a job for processing. Returns None if already locked."""
+        now = datetime.now(timezone.utc)
+        locked_until = now + timedelta(seconds=lease_sec)
+        with database.connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE process_jobs
+                SET
+                    locked_by = ?,
+                    locked_until = ?,
+                    status = ?,
+                    attempts = attempts + 1,
+                    updated_at = ?
+                WHERE id = ?
+                  AND status IN (?, ?)
+                  AND (locked_until IS NULL OR locked_until <= ?)
+                """,
+                (
+                    worker_id,
+                    locked_until.isoformat(),
+                    JobStatus.RUNNING.value,
+                    now.isoformat(),
+                    job_id,
+                    JobStatus.QUEUED.value,
+                    JobStatus.RUNNING.value,
+                    now.isoformat(),
+                ),
+            )
+            if cursor.rowcount != 1:
+                return None
+            row = conn.execute(
+                "SELECT data, attempts FROM process_jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+
+        job = ProcessJob.model_validate(json.loads(row["data"]))
+        job.locked_by = worker_id
+        job.locked_until = locked_until
+        job.status = JobStatus.RUNNING
+        job.attempts = int(row["attempts"])
+        job.updated_at = now
+        self._save(job)
+        return job
+
+    def renew_lock(self, job_id: str, worker_id: str, lease_sec: int) -> bool:
+        """Extend the lease while a worker is still processing."""
+        now = datetime.now(timezone.utc)
+        locked_until = now + timedelta(seconds=lease_sec)
+        with database.connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE process_jobs
+                SET locked_until = ?, updated_at = ?
+                WHERE id = ? AND locked_by = ?
+                """,
+                (locked_until.isoformat(), now.isoformat(), job_id, worker_id),
+            )
+            if cursor.rowcount != 1:
+                return False
+
+        job = self.get(job_id)
+        if job is None:
+            return False
+
+        job.locked_until = locked_until
+        job.updated_at = now
+        self._save(job)
+        return True
+
+    def release_lock(self, job_id: str, worker_id: str) -> None:
+        """Clear the lease after processing finishes."""
+        now = datetime.now(timezone.utc)
+        with database.connection() as conn:
+            conn.execute(
+                """
+                UPDATE process_jobs
+                SET locked_by = NULL, locked_until = NULL, updated_at = ?
+                WHERE id = ? AND locked_by = ?
+                """,
+                (now.isoformat(), job_id, worker_id),
+            )
+
+        job = self.get(job_id)
+        if job is None:
+            return
+
+        job.locked_by = None
+        job.locked_until = None
+        job.updated_at = now
+        self._save(job)
+
     def update(
         self,
         job_id: str,
@@ -63,6 +192,7 @@ class ProcessJobStore:
         progress: int | None = None,
         message: str | None = None,
         error: str | None = None,
+        last_error: str | None = None,
         processed_model_url: str | None = None,
         unfold_svg_url: str | None = None,
         unfold_pdf_url: str | None = None,
@@ -83,6 +213,8 @@ class ProcessJobStore:
             job.message = message
         if error is not None:
             job.error = error
+        if last_error is not None:
+            job.last_error = last_error
         if processed_model_url is not None:
             job.processed_model_url = processed_model_url
         if unfold_svg_url is not None:
@@ -104,16 +236,25 @@ class ProcessJobStore:
 
     def _save(self, job: ProcessJob) -> None:
         payload = json.dumps(job.model_dump(mode="json", by_alias=True))
+        locked_until = (
+            job.locked_until.isoformat() if job.locked_until is not None else None
+        )
         with database.connection() as conn:
             conn.execute(
                 """
                 INSERT INTO process_jobs (
-                    id, project_id, data, status, created_at, updated_at
+                    id, project_id, data, status,
+                    locked_by, locked_until, attempts, last_error,
+                    created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     data = excluded.data,
                     status = excluded.status,
+                    locked_by = excluded.locked_by,
+                    locked_until = excluded.locked_until,
+                    attempts = excluded.attempts,
+                    last_error = excluded.last_error,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -121,12 +262,18 @@ class ProcessJobStore:
                     job.project_id,
                     payload,
                     job.status.value,
+                    job.locked_by,
+                    locked_until,
+                    job.attempts,
+                    job.last_error,
                     job.created_at.isoformat(),
                     job.updated_at.isoformat(),
                 ),
             )
 
 
-_INCOMPLETE_STATUSES = (JobStatus.QUEUED.value, JobStatus.RUNNING.value)
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
 
 process_job_store = ProcessJobStore()

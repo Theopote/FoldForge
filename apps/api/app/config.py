@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     meshy_poll_interval_sec: float = 3.0
     meshy_poll_timeout_sec: float = 600.0
 
+    # Papercraft job worker identity and lease (multi-instance prep)
+    process_worker_id: str | None = None
+    process_job_lease_sec: int = 600
+
     # Papercraft quality
     block_export_on_unfold_overlap: bool = True
 
