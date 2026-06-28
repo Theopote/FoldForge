@@ -16,8 +16,16 @@ def cube_stl() -> None:
 
 
 def low_poly_bunny_obj() -> None:
-    # Placeholder low-poly organic mesh (20-face icosphere) until a real bunny is added.
-    mesh = trimesh.creation.icosphere(subdivisions=0, radius=30.0)
+    # Blocky bunny stand-in (multiple parts → internal fold lines in unfold).
+    body = trimesh.creation.box(extents=(28.0, 22.0, 32.0))
+    body.apply_translation((0.0, 0.0, 16.0))
+    head = trimesh.creation.box(extents=(20.0, 18.0, 20.0))
+    head.apply_translation((0.0, 0.0, 42.0))
+    ear_l = trimesh.creation.box(extents=(6.0, 4.0, 14.0))
+    ear_l.apply_translation((-8.0, 0.0, 54.0))
+    ear_r = trimesh.creation.box(extents=(6.0, 4.0, 14.0))
+    ear_r.apply_translation((8.0, 0.0, 54.0))
+    mesh = trimesh.util.concatenate([body, head, ear_l, ear_r])
     mesh.export(FIXTURES_DIR / "low_poly_bunny.obj")
 
 

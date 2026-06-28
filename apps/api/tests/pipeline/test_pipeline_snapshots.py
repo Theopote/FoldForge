@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from app.config import settings
-from app.schemas.model import Difficulty, PaperSize, ProjectSettings, Style
 from tests.helpers.pipeline_assertions import (
     assert_pdf_export,
     assert_pipeline_snapshot,
@@ -22,16 +21,6 @@ GOOD_FIXTURES = [
     "thin_parts_model.obj",
 ]
 
-# Icosphere bunny needs easier seams / fewer faces at MVP test sizes.
-FIXTURE_SETTINGS: dict[str, ProjectSettings | None] = {
-    "low_poly_bunny.obj": ProjectSettings(
-        paperSize=PaperSize.A4,
-        difficulty=Difficulty.EASY,
-        style=Style.LOW_POLY,
-        targetHeightMm=100.0,
-    ),
-}
-
 
 @pytest.mark.parametrize("fixture_name", GOOD_FIXTURES)
 def test_pipeline_snapshot(
@@ -41,12 +30,10 @@ def test_pipeline_snapshot(
 ) -> None:
     stem = Path(fixture_name).stem
     project_id = f"snap_{stem[:8]}"
-    settings_obj = FIXTURE_SETTINGS.get(fixture_name)
     result = run_pipeline_sync(
         fixture_name,
         project_id=project_id,
         project_name=f"Snapshot {stem}",
-        settings_obj=settings_obj,
     )
 
     svg_path = settings.exports_dir / f"{project_id}.svg"

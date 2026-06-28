@@ -69,16 +69,36 @@ def test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture
-async def api_client(test_env: Path) -> AsyncIterator:
-    """HTTP client against the FastAPI app with background workers."""
+async def api_client(
+    test_env: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> AsyncIterator:
+    """HTTP client with fresh background workers on the current event loop."""
     from httpx import ASGITransport, AsyncClient
 
+    import app.main as main_module
+    import app.routers.process as process_router
     from app.main import app
+    from app.services.ai.generation_queue import GenerationQueue
+    from app.services.process_queue import ProcessQueue
 
-    async with app.router.lifespan_context(app):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-            yield client
+    process_q = ProcessQueue()
+    generation_q = GenerationQueue()
+    monkeypatch.setattr("app.services.process_queue.process_queue", process_q)
+    monkeypatch.setattr("app.services.ai.generation_queue.generation_queue", generation_q)
+    monkeypatch.setattr(main_module, "process_queue", process_q)
+    monkeypatch.setattr(main_module, "generation_queue", generation_q)
+    monkeypatch.setattr(process_router, "process_queue", process_q)
+
+    await generation_q.start()
+    await process_q.start()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+
+    await process_q.stop()
+    await generation_q.stop()
 
 
 @pytest.fixture
