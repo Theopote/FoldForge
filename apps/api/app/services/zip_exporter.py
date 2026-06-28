@@ -4,6 +4,9 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.schemas.model import ProjectSettings
+from app.services.instruction_generator import generate_instructions
+
 
 def export_zip(
     output_path: Path,
@@ -11,16 +14,20 @@ def export_zip(
     files: dict[str, Path],
     stats: dict[str, int | str],
     warnings: list[str],
+    settings: ProjectSettings | None = None,
 ) -> Path:
     """
     Create a ZIP archive containing templates, processed model, and instructions.
 
     `files` maps archive entry names to absolute filesystem paths.
     """
+    settings_obj = settings or ProjectSettings()
     readme = _build_readme(project_name, stats, warnings)
+    instructions = generate_instructions(project_name, settings_obj, stats, warnings)
 
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("README.txt", readme)
+        archive.writestr("instructions.txt", instructions)
 
         for entry_name, file_path in files.items():
             if file_path.exists():
@@ -44,6 +51,7 @@ def _build_readme(
         "Contents:",
         "  unfold.pdf   — Print this file (100% scale, no fit-to-page)",
         "  unfold.svg   — Vector template for editing",
+        "  instructions.txt — Detailed print & assembly guide",
         "  model.glb    — Processed low-poly reference model",
         "",
         "Stats:",

@@ -6,6 +6,7 @@ import svgwrite
 
 from app.models.geometry import LayoutPage, PlacedPiece
 from app.schemas.model import ProjectSettings
+from app.services.export_annotations import draw_svg_page_annotations
 
 
 def export_svg(
@@ -68,6 +69,16 @@ def _draw_page(
 
     for placed in page.placed_pieces:
         _draw_piece(page_group, drawing, placed, page.height_mm, y_offset, settings)
+
+    draw_svg_page_annotations(
+        drawing,
+        page_group,
+        page_width_mm=page.width_mm,
+        page_height_mm=page.height_mm,
+        y_offset=y_offset,
+        settings=settings,
+        show_legend=page.index == 0,
+    )
 
     drawing.add(page_group)
 

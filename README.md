@@ -85,6 +85,19 @@ Open:
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
 
+## Supported formats
+
+| Input | Status | Notes |
+|-------|--------|-------|
+| OBJ, STL, GLB, GLTF | **Stable** | Recommended for upload → papercraft pipeline |
+| FBX | **Experimental** | Rejected at upload in MVP (unreliable Trimesh import) |
+| Text → 3D | **Experimental** | Requires configured AI provider (`AI_PROVIDER`, API keys) |
+| Image → 3D | **Experimental** | Same as text; quality varies by provider |
+
+Exports: **PDF** (with 50 mm scale check + legend), **SVG**, **ZIP** (includes `README.txt` and `instructions.txt`).
+
+Projects and async jobs are persisted in **SQLite** (`storage/foldforge.db`) so a backend restart does not lose project metadata.
+
 ## MVP Progress
 
 | Step | Status | Description |
@@ -105,10 +118,11 @@ Open:
 |--------|------|-------------|
 | GET | `/health` | Health check |
 | POST | `/api/upload-model` | Upload OBJ / STL / GLB / GLTF |
-| POST | `/api/generate-from-text` | AI text → 3D (Phase 2) |
-| POST | `/api/generate-from-image` | AI image → 3D (Phase 2) |
+| POST | `/api/generate-from-text` | AI text → 3D (**experimental**) |
+| POST | `/api/generate-from-image` | AI image → 3D (**experimental**) |
 | GET | `/api/ai/providers` | List AI providers |
-| POST | `/api/process-model` | Process model (stub) |
+| POST | `/api/process-model` | Queue papercraft job → returns `jobId` (202) |
+| GET | `/api/process-jobs/{jobId}` | Poll process job status / result |
 | GET | `/api/projects/:id` | Get project |
 | GET | `/api/projects/:id/export/pdf` | Download PDF |
 | GET | `/api/projects/:id/export/svg` | Download SVG |
@@ -156,6 +170,18 @@ Refresh pipeline snapshots after intentional geometry changes:
 cd apps/api
 UPDATE_SNAPSHOTS=1 python -m pytest tests/pipeline/test_pipeline_snapshots.py
 ```
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `npm run dev` — API won't start | Virtualenv not activated | Activate `apps/api/.venv` so `python` finds uvicorn |
+| `python` not found / wrong version | System Python vs venv | Use `python3` on macOS/Linux; create venv per Quick Start |
+| Upload returns 400 for FBX | FBX not supported in MVP | Convert to OBJ, STL, or GLB |
+| Generate hangs / times out | Long-running unfold or layout | Check `/api/process-jobs/{jobId}`; try **Easy** mode |
+| Project 404 after restart | Old localStorage ID | Reload from `/projects/{id}` only if backend DB still has it |
+| Empty PDF / SVG | Process job failed | Open job error message; try a simpler mesh (e.g. `cube.stl`) |
+| Text/Image → 3D fails | No AI provider configured | Set `AI_PROVIDER=mock` for demo or configure Meshy/Replicate keys |
 
 ## License
 

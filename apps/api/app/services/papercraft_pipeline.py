@@ -110,6 +110,7 @@ def run_pipeline(
             "level": craft_level,
         },
         warnings=craft_warnings,
+        settings=settings,
     )
 
     difficulty_score = _difficulty_score(len(mesh.faces), len(pieces), len(pages))

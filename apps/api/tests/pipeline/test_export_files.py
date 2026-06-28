@@ -27,7 +27,19 @@ def test_export_files_from_cube_pipeline(run_pipeline_sync, fast_layout, test_en
     assert zip_path.exists() and zip_path.stat().st_size > 500
 
     svg_text = svg_path.read_text(encoding="utf-8")
+    assert "Scale check" in svg_text
+    assert "Legend" in svg_text
     assert 'stroke-dasharray="2,1"' in svg_text or "stroke-dasharray" in svg_text
+
+    import zipfile
+
+    with zipfile.ZipFile(zip_path) as archive:
+        names = archive.namelist()
+        assert "README.txt" in names
+        assert "instructions.txt" in names
+        instructions = archive.read("instructions.txt").decode("utf-8")
+        assert "Print settings" in instructions
+        assert "50 mm scale check" in instructions
 
     assert result.craftability_score >= 0
     assert result.craftability_score <= 100

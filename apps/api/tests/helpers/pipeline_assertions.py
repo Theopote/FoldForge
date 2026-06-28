@@ -63,6 +63,8 @@ def assert_svg_export(path: Path, *, project_name: str) -> None:
     assert "viewBox=" in content
     assert project_name in content
     assert "stroke" in content
+    assert "Scale check" in content
+    assert "Legend" in content
     assert path.stat().st_size > 500
 
 

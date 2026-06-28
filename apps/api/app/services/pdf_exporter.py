@@ -7,6 +7,7 @@ from reportlab.pdfgen import canvas
 
 from app.models.geometry import LayoutPage, PlacedPiece
 from app.schemas.model import ProjectSettings
+from app.services.export_annotations import draw_pdf_page_annotations
 
 
 def export_pdf(
@@ -28,6 +29,13 @@ def export_pdf(
     for page in pages:
         pdf.setPageSize((page.width_mm * mm, page.height_mm * mm))
         _draw_page_pdf(pdf, page, project_name, settings)
+        draw_pdf_page_annotations(
+            pdf,
+            page_width_mm=page.width_mm,
+            page_height_mm=page.height_mm,
+            settings=settings,
+            show_legend=page.index == 0,
+        )
         pdf.showPage()
 
     pdf.save()

@@ -6,6 +6,11 @@ from app.models.geometry import LayoutPage, UnfoldPiece
 from app.schemas.model import Difficulty
 from app.services.unfolder import piece_bounds
 
+MIN_PIECE_DIMENSION_MM = 12.0
+MIN_TAB_WIDTH_MM = 5.0
+MAX_PAGES_WARNING = 6
+MAX_PAGES_SOFT = 3
+
 
 def compute_craftability(
     mesh: trimesh.Trimesh,
@@ -41,23 +46,46 @@ def compute_craftability(
     elif piece_count > 15:
         score -= 8
 
-    if page_count > 6:
+    if page_count > MAX_PAGES_WARNING:
         score -= 15
-        warnings.append("Template spans many pages — printing cost may be high.")
-    elif page_count > 3:
+        warnings.append(
+            f"Template spans {page_count} pages — printing and assembly will take longer."
+        )
+    elif page_count > MAX_PAGES_SOFT:
         score -= 5
+        warnings.append(f"Template uses {page_count} pages — check paper supply before printing.")
 
     small_pieces = 0
     for piece in pieces:
         min_x, min_y, max_x, max_y = piece_bounds(piece, include_tabs=True)
         min_dim = min(max_x - min_x, max_y - min_y)
-        if min_dim < 12:
+        if min_dim < MIN_PIECE_DIMENSION_MM:
             small_pieces += 1
 
     if small_pieces > 0:
         penalty = min(20, small_pieces * 4)
         score -= penalty
-        warnings.append("Some parts may be too small to cut by hand.")
+        warnings.append(
+            f"{small_pieces} part(s) are smaller than {MIN_PIECE_DIMENSION_MM:.0f} mm — "
+            "may be difficult to cut by hand."
+        )
+
+    small_tabs = 0
+    for piece in pieces:
+        for tab in piece.tabs:
+            if len(tab.polygon) < 3:
+                continue
+            xs = [point.x for point in tab.polygon]
+            ys = [point.y for point in tab.polygon]
+            if min(max(xs) - min(xs), max(ys) - min(ys)) < MIN_TAB_WIDTH_MM:
+                small_tabs += 1
+
+    if small_tabs > 0:
+        score -= min(15, small_tabs * 3)
+        warnings.append(
+            f"{small_tabs} glue tab(s) are narrower than {MIN_TAB_WIDTH_MM:.0f} mm — "
+            "tabs may tear when folded."
+        )
 
     extents = mesh.bounding_box.extents
     thin_ratio = float(min(extents) / max(extents)) if max(extents) > 0 else 1.0
@@ -80,6 +108,9 @@ def compute_craftability(
 
     if layout_has_overlaps:
         score -= 25
+        warnings.append(
+            "Pieces overlap on the printed page — cut lines may be unusable."
+        )
 
     scaled_labels = layout_scaled_labels or []
     if scaled_labels:
