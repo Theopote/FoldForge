@@ -37,6 +37,80 @@ class LayoutIssueReport:
     oversize_piece_labels: list[str] = field(default_factory=list)
     overflow_count: int = 0
 
+    @property
+    def scaled_piece_labels(self) -> list[str]:
+        """Legacy alias — oversize pieces are never scaled down."""
+        return self.oversize_piece_labels
+
+
+def find_pieces_too_large_for_paper(
+    pieces: list[UnfoldPiece],
+    paper_size: PaperSize,
+    *,
+    target_height_mm: float | None = None,
+) -> list:
+    """Return pieces whose minimum rotated bbox exceeds the printable area."""
+    from app.services.pipeline_errors import PieceTooLarge
+
+    page_width, page_height = PAPER_SIZES_MM[paper_size]
+    usable_w = page_width - 2 * MARGIN_MM
+    usable_h = page_height - 2 * MARGIN_MM
+    oversize: list[PieceTooLarge] = []
+
+    for piece in pieces:
+        if _piece_fits_paper(piece, usable_w, usable_h):
+            continue
+
+        label = piece.label or piece.id
+        min_w, min_h = _smallest_rotated_bbox_mm(piece)
+        suggested = None
+        if target_height_mm is not None and min_w > 0 and min_h > 0:
+            scale = min(usable_w / min_w, usable_h / min_h) * 0.95
+            suggested = max(20.0, target_height_mm * scale)
+
+        oversize.append(
+            PieceTooLarge(
+                label=label,
+                width_mm=round(min_w, 1),
+                height_mm=round(min_h, 1),
+                paper_size=paper_size.value,
+                usable_width_mm=round(usable_w, 1),
+                usable_height_mm=round(usable_h, 1),
+                suggested_target_height_mm=round(suggested, 1) if suggested else None,
+            )
+        )
+
+    return oversize
+
+
+def _piece_fits_paper(piece: UnfoldPiece, usable_w: float, usable_h: float) -> bool:
+    for rotation in range(4):
+        normalized = _normalize_to_origin(rotate_piece(piece, rotation))
+        min_x, min_y, max_x, max_y = piece_bounds(normalized, include_tabs=True)
+        width = max_x - min_x
+        height = max_y - min_y
+        if width <= usable_w and height <= usable_h:
+            return True
+    return False
+
+
+def _smallest_rotated_bbox_mm(piece: UnfoldPiece) -> tuple[float, float]:
+    """Dimensions of the most compact rotation (for error reporting)."""
+    best_w = 0.0
+    best_h = 0.0
+    best_area = float("inf")
+    for rotation in range(4):
+        normalized = _normalize_to_origin(rotate_piece(piece, rotation))
+        min_x, min_y, max_x, max_y = piece_bounds(normalized, include_tabs=True)
+        width = max_x - min_x
+        height = max_y - min_y
+        area = width * height
+        if area < best_area:
+            best_area = area
+            best_w = width
+            best_h = height
+    return best_w, best_h
+
 
 def detect_layout_issues(pages: list[LayoutPage]) -> LayoutIssueReport:
     """Find page overlaps, printable-area overflows, and oversize pieces."""
@@ -184,16 +258,7 @@ def _place_piece_nesting(
         )
         return
 
-    # Too large for the printable area at any rotation — keep original scale and warn.
-    compact = _most_compact_rotation(piece)
-    new_page.placed_pieces.append(
-        PlacedPiece(
-            piece=translate_piece(compact, MARGIN_MM, MARGIN_MM),
-            offset_x=MARGIN_MM,
-            offset_y=MARGIN_MM,
-            page_index=new_page.index,
-        ),
-    )
+    # Printable area too small at uniform scale — skip; layout_with_repair will fail safely.
 
 
 def _find_placement_on_page(
@@ -322,17 +387,3 @@ def _bbox_area(piece: UnfoldPiece) -> float:
 def _normalize_to_origin(piece: UnfoldPiece) -> UnfoldPiece:
     min_x, min_y, _, _ = piece_bounds(piece, include_tabs=True)
     return translate_piece(piece, -min_x, -min_y)
-
-
-def _most_compact_rotation(piece: UnfoldPiece) -> UnfoldPiece:
-    """Pick the rotation with the smallest axis-aligned bounding box."""
-    best = _normalize_to_origin(piece)
-    best_area = float("inf")
-    for rotation in range(4):
-        candidate = _normalize_to_origin(rotate_piece(piece, rotation))
-        min_x, min_y, max_x, max_y = piece_bounds(candidate, include_tabs=True)
-        area = (max_x - min_x) * (max_y - min_y)
-        if area < best_area:
-            best_area = area
-            best = candidate
-    return best

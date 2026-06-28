@@ -16,13 +16,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { processModel } from "@/lib/api";
+import { cancelProcessJob, processModel } from "@/lib/api";
 import { beginJobPoll, cancelJobPoll } from "@/lib/job-poll-session";
 import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
 import { isAbortError } from "@/lib/poll-utils";
+import {
+  formatProcessJobError,
+  isProcessJobCancelled,
+} from "@/lib/process-errors";
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore } from "@/types";
 
@@ -37,6 +41,7 @@ export function ProjectSettingsPanel() {
     addLog,
     setError,
     setActiveProcessJobId,
+    activeProcessJobId,
   } = useStudioStore();
 
   useEffect(() => () => cancelJobPoll("process"), []);
@@ -93,16 +98,34 @@ export function ProjectSettingsPanel() {
         }
       }
     } catch (error) {
-      if (isAbortError(error)) return;
+      if (isAbortError(error) || isProcessJobCancelled(error)) return;
 
-      const message =
-        error instanceof Error ? error.message : "Generation failed.";
+      const message = formatProcessJobError(error, "Generation failed.");
       setError(message);
       useStudioStore.getState().setStatus("failed");
       setActiveProcessJobId(null);
       clearJobProgressTracking();
       addLog(`Error: ${message}`);
     }
+  };
+
+  const handleCancel = async () => {
+    if (!activeProcessJobId) return;
+
+    cancelJobPoll("process");
+    try {
+      await cancelProcessJob(activeProcessJobId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to cancel processing.";
+      addLog(`Error: ${message}`);
+      return;
+    }
+
+    setActiveProcessJobId(null);
+    clearJobProgressTracking();
+    useStudioStore.getState().setStatus("uploaded");
+    addLog("Processing cancelled.");
   };
 
   return (
@@ -238,6 +261,16 @@ export function ProjectSettingsPanel() {
         >
           {status === "processing" ? "Generating template…" : "Generate Template"}
         </Button>
+
+        {status === "processing" && activeProcessJobId && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => void handleCancel()}
+          >
+            Cancel processing
+          </Button>
+        )}
 
         {status === "ready" && projectId && (
           <Button variant="outline" className="w-full" asChild>

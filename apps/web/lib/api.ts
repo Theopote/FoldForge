@@ -207,6 +207,21 @@ export async function startProcessModel(
   return body;
 }
 
+/** Cancel a queued or running papercraft process job. */
+export async function cancelProcessJob(jobId: string): Promise<ProcessJobResponse> {
+  const response = await fetch(`/api/process-jobs/${jobId}/cancel`, {
+    method: "POST",
+  });
+  const body = (await response.json().catch(() => ({}))) as ProcessJobResponse &
+    ApiErrorBody;
+
+  if (!response.ok) {
+    throw new Error(parseApiError(body, "Failed to cancel process job."));
+  }
+
+  return body;
+}
+
 /**
  * Run the papercraft generation pipeline for a project (async queue + poll).
  */

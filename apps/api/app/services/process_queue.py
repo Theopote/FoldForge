@@ -13,7 +13,7 @@ from app.schemas.job import JobStatus
 from app.schemas.model import ProjectStatus
 from app.schemas.stats import CraftabilityScore, ProcessStats
 from app.services.papercraft_pipeline import run_pipeline
-from app.services.pipeline_errors import UnfoldRepairError
+from app.services.pipeline_errors import JobCancelledError, LayoutFitError, UnfoldRepairError
 from app.services.process_job_store import process_job_store
 from app.services.project_store import project_store
 from app.utils.logging_utils import get_logger
@@ -94,6 +94,12 @@ class ProcessQueue:
                 self._queue.task_done()
 
     async def _process_job(self, job_id: str) -> None:
+        job = process_job_store.get(job_id)
+        if job is None:
+            return
+        if job.status == JobStatus.CANCELLED:
+            return
+
         job = process_job_store.try_acquire_lock(
             job_id,
             self._worker_id,
@@ -125,8 +131,13 @@ class ProcessQueue:
         project_store.update(project)
 
         def on_progress(progress: int, message: str) -> None:
+            if process_job_store.is_cancel_requested(job_id):
+                raise JobCancelledError("Processing cancelled.")
             process_job_store.update(job_id, progress=progress, message=message)
             process_job_store.renew_lock(job_id, self._worker_id, self._lease_sec)
+
+        def cancel_check() -> bool:
+            return process_job_store.is_cancel_requested(job_id)
 
         source_path = Path(job.source_path)
         try:
@@ -138,6 +149,7 @@ class ProcessQueue:
                 settings=job.settings,
                 source_original_path=source_path,
                 on_progress=on_progress,
+                cancel_check=cancel_check,
             )
 
             stats = ProcessStats(
@@ -176,6 +188,28 @@ class ProcessQueue:
                 craftability=craftability,
                 export_blocked=result.export_blocked,
                 has_unfold_overlap=result.has_unfold_overlap,
+            )
+        except JobCancelledError:
+            logger.info("Process job %s cancelled", job_id)
+            project.status = ProjectStatus.UPLOADED
+            project_store.update(project)
+            process_job_store.update(
+                job_id,
+                status=JobStatus.CANCELLED,
+                message="Cancelled",
+                cancel_requested=False,
+            )
+        except LayoutFitError as exc:
+            logger.warning("Process job %s layout fit failed: %s", job_id, exc)
+            project.status = ProjectStatus.FAILED
+            project_store.update(project)
+            process_job_store.update(
+                job_id,
+                status=JobStatus.FAILED,
+                error=str(exc),
+                last_error=str(exc),
+                message="Layout fit failed",
+                result_status=ProjectStatus.FAILED,
             )
         except UnfoldRepairError as exc:
             logger.warning("Process job %s failed repair: %s", job_id, exc)

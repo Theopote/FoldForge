@@ -26,6 +26,12 @@ def summarize_pipeline(
         "cut_lines": cut_lines,
         "tabs": tabs,
         "piece_overlaps": sum(1 for piece in result.pieces if piece.has_overlap),
+        "scaled_piece_count": sum(
+            1
+            for page in result.pages
+            for placed in page.placed_pieces
+            if placed.piece.id.endswith("-scaled")
+        ),
         "craftability_score": result.craftability_score,
         "craftability_level": result.craftability_level,
         "warning_count": len(result.warnings),

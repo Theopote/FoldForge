@@ -48,6 +48,7 @@ def test_pipeline_snapshot(
     assert metrics["pages"] >= 1
     assert metrics["cut_lines"] >= 1
     assert metrics["piece_overlaps"] == 0
+    assert metrics["scaled_piece_count"] == 0
 
     assert_pipeline_snapshot(stem, metrics)
 

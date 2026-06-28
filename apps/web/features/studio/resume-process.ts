@@ -10,6 +10,10 @@ import {
   reportJobProgress,
 } from "@/lib/job-progress";
 import { isAbortError } from "@/lib/poll-utils";
+import {
+  formatProcessJobError,
+  isProcessJobCancelled,
+} from "@/lib/process-errors";
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore, ProjectStatus } from "@/types";
 
@@ -65,10 +69,9 @@ export async function resumeProcessJob(jobId: string): Promise<void> {
 
     applyCompletedProcessJob(job);
   } catch (error) {
-    if (isAbortError(error)) return;
+    if (isAbortError(error) || isProcessJobCancelled(error)) return;
 
-    const message =
-      error instanceof Error ? error.message : "Processing resume failed.";
+    const message = formatProcessJobError(error, "Processing resume failed.");
     setError(message);
     setStatus("failed");
     setActiveProcessJobId(null);

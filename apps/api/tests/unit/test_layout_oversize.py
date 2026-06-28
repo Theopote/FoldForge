@@ -1,19 +1,22 @@
-"""Layout engine must not scale individual papercraft pieces."""
+"""Layout fit errors — no per-piece scaling."""
 
 from __future__ import annotations
+
+import pytest
 
 from app.models.geometry import Point2D, UnfoldPiece
 from app.schemas.model import PaperSize
 from app.services.layout_engine import (
     MARGIN_MM,
     PAPER_SIZES_MM,
-    detect_layout_issues,
+    find_pieces_too_large_for_paper,
     layout_pieces,
-    piece_bounds,
 )
+from app.services.layout_repair import ensure_layout_exportable, layout_with_repair
+from app.services.pipeline_errors import LayoutFitError
 
 
-def _oversize_piece(width_mm: float, height_mm: float, label: str = "XL") -> UnfoldPiece:
+def _oversize_piece(width_mm: float, height_mm: float, label: str = "A") -> UnfoldPiece:
     return UnfoldPiece(
         id="oversize-test",
         face_ids=[0],
@@ -27,26 +30,58 @@ def _oversize_piece(width_mm: float, height_mm: float, label: str = "XL") -> Unf
     )
 
 
-def test_oversize_piece_is_not_scaled() -> None:
+def test_oversize_piece_is_not_scaled_or_placed() -> None:
     page_w, page_h = PAPER_SIZES_MM[PaperSize.A4]
     usable_w = page_w - 2 * MARGIN_MM
     usable_h = page_h - 2 * MARGIN_MM
     piece = _oversize_piece(usable_w + 40, usable_h + 20, label="Panel A")
-    source_bounds = piece_bounds(piece, include_tabs=True)
+    source_bounds = piece.polygon[2].x, piece.polygon[2].y
 
     pages = layout_pieces([piece], PaperSize.A4)
-    issues = detect_layout_issues(pages)
+    placed_count = sum(len(page.placed_pieces) for page in pages)
 
-    placed = pages[0].placed_pieces[0].piece
-    placed_bounds = piece_bounds(placed, include_tabs=True)
+    assert placed_count == 0
+    assert source_bounds[0] > usable_w
+    assert "-scaled" not in piece.id
 
-    source_w = source_bounds[2] - source_bounds[0]
-    source_h = source_bounds[3] - source_bounds[1]
-    placed_w = placed_bounds[2] - placed_bounds[0]
-    placed_h = placed_bounds[3] - placed_bounds[1]
 
-    assert abs(placed_w - source_w) < 0.01
-    assert abs(placed_h - source_h) < 0.01
-    assert "-scaled" not in placed.id
-    assert issues.oversize_piece_labels == ["Panel A"]
-    assert issues.overflow_count == 1
+def test_piece_too_large_on_a4_fails_with_clear_message() -> None:
+    page_w, page_h = PAPER_SIZES_MM[PaperSize.A4]
+    usable_w = page_w - 2 * MARGIN_MM
+    usable_h = page_h - 2 * MARGIN_MM
+    piece = _oversize_piece(usable_w + 30, usable_h + 10, label="A")
+
+    oversize = find_pieces_too_large_for_paper(
+        [piece],
+        PaperSize.A4,
+        target_height_mm=200,
+    )
+    assert len(oversize) == 1
+    assert oversize[0].label == "A"
+    assert "A4" in oversize[0].user_message()
+    assert "target height" in oversize[0].user_message().lower()
+
+    result = layout_with_repair([piece], PaperSize.A4, target_height_mm=200)
+    assert result.export_blocked is True
+    assert result.oversize_piece_labels == ["A"]
+    assert result.scaled_piece_labels == ["A"]
+
+    with pytest.raises(LayoutFitError) as exc_info:
+        ensure_layout_exportable(result)
+
+    assert "too large" in str(exc_info.value).lower()
+    assert exc_info.value.suggestions
+
+
+def test_rotated_fit_uses_same_rotation_dims() -> None:
+    """Wide-short and tall-narrow bbox must not false-negative fit checks."""
+    page_w, page_h = PAPER_SIZES_MM[PaperSize.A4]
+    usable_w = page_w - 2 * MARGIN_MM
+    usable_h = page_h - 2 * MARGIN_MM
+    # 250×50 mm — fits when rotated to 50×250 if printable height allows
+    piece = _oversize_piece(250, 50, label="Strip")
+    oversize = find_pieces_too_large_for_paper([piece], PaperSize.A4)
+    if usable_h >= 250:
+        assert oversize == []
+    else:
+        assert len(oversize) == 1

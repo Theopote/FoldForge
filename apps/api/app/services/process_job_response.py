@@ -21,4 +21,5 @@ def build_process_job_response(job: ProcessJob) -> ProcessJobResponse:
         craftability=job.craftability,
         exportBlocked=job.export_blocked,
         hasUnfoldOverlap=job.has_unfold_overlap,
+        cancelRequested=job.cancel_requested,
     )

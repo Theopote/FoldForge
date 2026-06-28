@@ -202,6 +202,7 @@ class ProcessJobStore:
         craftability=None,
         export_blocked: bool | None = None,
         has_unfold_overlap: bool | None = None,
+        cancel_requested: bool | None = None,
     ) -> ProcessJob | None:
         job = self.get(job_id)
         if job is None:
@@ -235,10 +236,39 @@ class ProcessJobStore:
             job.export_blocked = export_blocked
         if has_unfold_overlap is not None:
             job.has_unfold_overlap = has_unfold_overlap
+        if cancel_requested is not None:
+            job.cancel_requested = cancel_requested
 
         job.updated_at = datetime.now(timezone.utc)
         self._save(job)
         return job
+
+    def is_cancel_requested(self, job_id: str) -> bool:
+        job = self.get(job_id)
+        return bool(job and job.cancel_requested)
+
+    def cancel(self, job_id: str) -> ProcessJob | None:
+        """Cancel a queued job immediately or request stop for a running job."""
+        job = self.get(job_id)
+        if job is None:
+            return None
+
+        if job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            return job
+
+        if job.status == JobStatus.QUEUED:
+            return self.update(
+                job_id,
+                status=JobStatus.CANCELLED,
+                message="Cancelled",
+                cancel_requested=False,
+            )
+
+        return self.update(
+            job_id,
+            cancel_requested=True,
+            message="Cancellation requested",
+        )
 
     def _save(self, job: ProcessJob) -> None:
         payload = json.dumps(job.model_dump(mode="json", by_alias=True))

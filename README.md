@@ -98,6 +98,10 @@ Exports: **PDF** (with 50 mm scale check + legend), **SVG**, **ZIP** (includes `
 
 Projects and async jobs are persisted in **SQLite** (`storage/foldforge.db`) so a backend restart does not lose project metadata.
 
+## Papercraft layout policy
+
+FoldForge **never scales individual paper pieces** to force them onto a page. All parts stay at the same model scale so glue tabs and edges remain aligned. If a piece is too large for the selected paper, export is blocked and you receive a clear error with suggestions (larger paper, lower target height, Easy mode).
+
 ## MVP Progress
 
 | Step | Status | Description |
@@ -123,6 +127,7 @@ Projects and async jobs are persisted in **SQLite** (`storage/foldforge.db`) so 
 | GET | `/api/ai/providers` | List AI providers |
 | POST | `/api/process-model` | Queue papercraft job → returns `jobId` (202) |
 | GET | `/api/process-jobs/{jobId}` | Poll process job status / result |
+| POST | `/api/process-jobs/{jobId}/cancel` | Cancel queued job or request stop for running job |
 | GET | `/api/projects/:id` | Get project |
 | GET | `/api/projects/:id/export/pdf` | Download PDF |
 | GET | `/api/projects/:id/export/svg` | Download SVG |
@@ -178,7 +183,9 @@ UPDATE_SNAPSHOTS=1 python -m pytest tests/pipeline/test_pipeline_snapshots.py
 | `npm run dev` — API won't start | Virtualenv not activated | Activate `apps/api/.venv` so `python` finds uvicorn |
 | `python` not found / wrong version | System Python vs venv | Use `python3` on macOS/Linux; create venv per Quick Start |
 | Upload returns 400 for FBX | FBX not supported in MVP | Convert to OBJ, STL, or GLB |
-| Generate hangs / times out | Long-running unfold or layout | Check `/api/process-jobs/{jobId}`; try **Easy** mode |
+| Generate hangs / times out | Long-running unfold or layout | Check `/api/process-jobs/{jobId}`; try **Easy** mode or cancel the job |
+| **Piece too large for paper** | Target height or paper size | Error names the piece and paper, e.g. try **A3** or reduce **target height**; Easy mode splits into smaller parts |
+| Piece scaled / misaligned tabs | Old build or manual edit | Current FoldForge does not per-piece scale; regenerate after changing paper or height |
 | Project 404 after restart | Old localStorage ID | Reload from `/projects/{id}` only if backend DB still has it |
 | Empty PDF / SVG | Process job failed | Open job error message; try a simpler mesh (e.g. `cube.stl`) |
 | Text/Image → 3D fails | No AI provider configured | Set `AI_PROVIDER=mock` for demo or configure Meshy/Replicate keys |

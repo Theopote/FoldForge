@@ -2,12 +2,17 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 from app.config import settings as app_settings
 from app.models.geometry import PipelineResult
 from app.schemas.model import ProjectSettings
 from app.services.craftability_scorer import compute_craftability
-from app.services.layout_repair import collect_layout_warnings, layout_with_repair
+from app.services.layout_repair import (
+    collect_layout_warnings,
+    ensure_layout_exportable,
+    layout_with_repair,
+)
 from app.services.mesh_cleaner import clean_mesh, mesh_quality_issues
 from app.services.mesh_simplifier import scale_to_target_height, simplify_mesh
 from app.services.model_loader import load_mesh
@@ -18,9 +23,19 @@ from app.services.outline_optimizer import optimize_pieces_cut_outlines
 from app.services.tab_generator import add_tabs_to_pieces
 from app.services.unfold_repair import collect_unfold_warnings, unfold_with_auto_repair
 from app.services.zip_exporter import export_zip
+from app.services.pipeline_errors import JobCancelledError
 from app.utils.file_utils import build_storage_url
 
 ProgressCallback = Callable[[int, str], None]
+
+
+class CancelCheck(Protocol):
+    def __call__(self) -> bool: ...
+
+
+def _check_cancelled(cancel_check: CancelCheck | None) -> None:
+    if cancel_check is not None and cancel_check():
+        raise JobCancelledError("Processing cancelled.")
 
 
 def run_pipeline(
@@ -30,6 +45,7 @@ def run_pipeline(
     settings: ProjectSettings,
     source_original_path: Path | None = None,
     on_progress: ProgressCallback | None = None,
+    cancel_check: CancelCheck | None = None,
 ) -> PipelineResult:
     """
     Execute load → clean → simplify → seam → unfold → tabs → layout → export.
@@ -37,6 +53,7 @@ def run_pipeline(
     Writes processed mesh, SVG, and PDF to storage and returns metadata.
     """
     def report(progress: int, message: str) -> None:
+        _check_cancelled(cancel_check)
         if on_progress is not None:
             on_progress(progress, message)
 
@@ -70,7 +87,12 @@ def run_pipeline(
         pieces = optimize_pieces_cut_outlines(pieces)
 
     report(70, "Laying out pages")
-    layout_result = layout_with_repair(pieces, settings.paper_size)
+    layout_result = layout_with_repair(
+        pieces,
+        settings.paper_size,
+        target_height_mm=settings.target_height_mm,
+    )
+    ensure_layout_exportable(layout_result)
     pages = layout_result.pages
     layout_warnings = collect_layout_warnings(layout_result)
 

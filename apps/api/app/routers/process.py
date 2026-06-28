@@ -80,6 +80,26 @@ async def get_process_job(job_id: str) -> ProcessJobResponse:
     return build_process_job_response(job)
 
 
+@router.post("/process-jobs/{job_id}/cancel", response_model=ProcessJobResponse)
+async def cancel_process_job(job_id: str) -> ProcessJobResponse:
+    """Cancel a queued job or request cancellation of a running job."""
+    job = process_job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Process job not found.")
+
+    if job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job already {job.status.value}.",
+        )
+
+    updated = process_job_store.cancel(job_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Process job not found.")
+
+    return build_process_job_response(updated)
+
+
 @router.get("/projects/{project_id}")
 async def get_project(project_id: str) -> dict:
     """Return project metadata by ID."""
