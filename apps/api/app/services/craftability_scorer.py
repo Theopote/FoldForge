@@ -13,6 +13,9 @@ def compute_craftability(
     pages: list[LayoutPage],
     difficulty: Difficulty,
     extra_warnings: list[str],
+    *,
+    layout_has_overlaps: bool = False,
+    layout_scaled_labels: list[str] | None = None,
 ) -> tuple[int, str, list[str]]:
     """
     Compute a 0–100 craftability score with level and warnings.
@@ -74,6 +77,13 @@ def compute_craftability(
             f"{overlap_count} piece(s) have unfold overlaps — "
             "the printed template may not fold correctly."
         )
+
+    if layout_has_overlaps:
+        score -= 25
+
+    scaled_labels = layout_scaled_labels or []
+    if scaled_labels:
+        score -= min(20, len(scaled_labels) * 8)
 
     if difficulty == Difficulty.ADVANCED and piece_count > 20:
         warnings.append("Advanced mode with many pieces — not ideal for beginners.")

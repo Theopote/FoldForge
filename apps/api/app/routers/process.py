@@ -9,6 +9,7 @@ from app.schemas.unfold import ProcessModelRequest, ProcessModelResponse
 from app.services.ai.job_response import build_generation_job_response
 from app.services.ai.job_store import generation_job_store
 from app.services.papercraft_pipeline import run_pipeline
+from app.services.pipeline_errors import UnfoldRepairError
 from app.services.project_store import project_store
 from app.utils.file_utils import resolve_storage_path
 from app.utils.logging_utils import get_logger
@@ -91,6 +92,14 @@ async def process_model(request: ProcessModelRequest) -> ProcessModelResponse:
 
     except HTTPException:
         raise
+    except UnfoldRepairError as exc:
+        logger.warning("Unfold repair failed for project %s: %s", project.id, exc)
+        project.status = ProjectStatus.FAILED
+        project_store.update(project)
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         logger.exception("Processing failed for project %s", project.id)
         project.status = ProjectStatus.FAILED

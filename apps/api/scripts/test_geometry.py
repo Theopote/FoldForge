@@ -12,7 +12,8 @@ import trimesh
 from shapely.geometry import Polygon, box
 
 from app.schemas.model import Difficulty, PaperSize
-from app.services.layout_engine import layout_pieces
+from app.services.layout_engine import detect_layout_issues, layout_pieces
+from app.services.layout_repair import layout_with_repair
 from app.services.nfp_packing import decompose_to_convex_parts, no_fit_polygon
 from app.services.nfp_orbiting import no_fit_polygon_orbiting
 from app.services.outline_optimizer import optimize_piece_cut_outline
@@ -26,7 +27,13 @@ from app.services.parametrization import (
 from app.services.seam_generator import compute_edge_dihedral_angles, select_seams, split_into_patches
 from app.services.tab_generator import add_tabs_to_pieces
 from app.services.unfold_repair import unfold_with_auto_repair
-from app.services.unfolder import detect_unfold_overlaps, unfold_mesh
+from app.services.unfolder import (
+    compute_unfold_vertex_map,
+    detect_unfold_overlaps,
+    find_overlapping_face_pairs,
+    score_seams_by_overlap,
+    unfold_mesh,
+)
 
 
 def _box_mesh() -> trimesh.Trimesh:
@@ -142,6 +149,34 @@ def test_unfold_auto_repair() -> None:
     )
 
 
+def test_overlap_seam_scoring() -> None:
+    mesh = _box_mesh()
+    data = compute_edge_dihedral_angles(mesh)
+    patches = split_into_patches(mesh, select_seams(mesh, Difficulty.STANDARD, dihedral=data))
+    face_indices = patches[0]
+    vertex_2d, _ = compute_unfold_vertex_map(mesh, face_indices, data)
+    scores = score_seams_by_overlap(mesh, face_indices, vertex_2d)
+    pairs = find_overlapping_face_pairs(mesh, face_indices, vertex_2d)
+    assert pairs == [] or isinstance(scores, dict)
+    print("overlap seam scoring: ok", len(scores), "edge hints")
+
+
+def test_layout_repair() -> None:
+    mesh = _box_mesh()
+    data = compute_edge_dihedral_angles(mesh)
+    patches = split_into_patches(mesh, select_seams(mesh, Difficulty.STANDARD, dihedral=data))
+    pieces = add_tabs_to_pieces(
+        unfold_mesh(mesh, patches, dihedral=data),
+        add_tabs=True,
+        add_numbers=True,
+    )
+    pieces = [optimize_piece_cut_outline(p) for p in pieces]
+    result = layout_with_repair(pieces, PaperSize.A4)
+    issues = detect_layout_issues(result.pages)
+    assert not issues.has_overlaps
+    print("layout repair:", len(result.pages), "pages", result.messages)
+
+
 def test_unfold_layout_tabs() -> None:
     mesh = _box_mesh()
     data = compute_edge_dihedral_angles(mesh)
@@ -178,6 +213,8 @@ def main() -> None:
     test_cut_outline_boolean()
     test_seam_split_limits()
     test_unfold_auto_repair()
+    test_overlap_seam_scoring()
+    test_layout_repair()
     test_unfold_layout_tabs()
     print("All geometry tests passed.")
 

@@ -82,3 +82,4 @@ class PipelineResult:
     craftability_score: int
     craftability_level: str
     warnings: list[str]
+    export_blocked: bool = False

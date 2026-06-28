@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from shapely.geometry import Polygon, box
 from shapely.strtree import STRtree
 
@@ -23,14 +25,84 @@ PAPER_SIZES_MM: dict[PaperSize, tuple[float, float]] = {
 }
 
 MARGIN_MM = 10.0
-GAP_MM = 8.0
+DEFAULT_GAP_MM = 8.0
 COLLISION_EPS_MM2 = 0.25
 PLACEMENT_STEP_MM = 4.0
+
+
+@dataclass
+class LayoutIssueReport:
+    has_overlaps: bool = False
+    overlap_count: int = 0
+    scaled_piece_labels: list[str] = field(default_factory=list)
+    overflow_count: int = 0
+
+
+def detect_layout_issues(pages: list[LayoutPage]) -> LayoutIssueReport:
+    """Find page overlaps, scaled-down pieces, and printable-area overflows."""
+    overlap_count = 0
+    overflow_count = 0
+    scaled_labels: list[str] = []
+
+    for page in pages:
+        usable_w = page.width_mm - 2 * MARGIN_MM
+        usable_h = page.height_mm - 2 * MARGIN_MM
+        usable_box = box(MARGIN_MM, MARGIN_MM, MARGIN_MM + usable_w, MARGIN_MM + usable_h)
+        polys: list[Polygon] = []
+
+        for placed in page.placed_pieces:
+            piece = placed.piece
+            if piece.id.endswith("-scaled"):
+                label = piece.label or piece.id
+                if label not in scaled_labels:
+                    scaled_labels.append(label)
+
+            poly = piece_to_shapely(piece, include_tabs=True, gap_buffer=0.0)
+            if poly.is_empty:
+                continue
+
+            if not _fits_usable(poly, usable_box):
+                overflow_count += 1
+
+            polys.append(poly)
+
+        if len(polys) < 2:
+            continue
+
+        tree = STRtree(polys)
+        page_overlap = False
+        for index, poly in enumerate(polys):
+            for other_idx in tree.query(poly):
+                j = int(other_idx)
+                if j <= index:
+                    continue
+                other = polys[j]
+                if not poly.intersects(other):
+                    continue
+                if poly.touches(other):
+                    continue
+                if poly.intersection(other).area > COLLISION_EPS_MM2:
+                    page_overlap = True
+                    break
+            if page_overlap:
+                break
+
+        if page_overlap:
+            overlap_count += 1
+
+    return LayoutIssueReport(
+        has_overlaps=overlap_count > 0,
+        overlap_count=overlap_count,
+        scaled_piece_labels=scaled_labels,
+        overflow_count=overflow_count,
+    )
 
 
 def layout_pieces(
     pieces: list[UnfoldPiece],
     paper_size: PaperSize,
+    *,
+    gap_mm: float = DEFAULT_GAP_MM,
 ) -> list[LayoutPage]:
     """
     Pack pieces using bottom-left nesting with Shapely collision detection.
@@ -53,7 +125,16 @@ def layout_pieces(
     ]
 
     for piece in sorted_pieces:
-        _place_piece_nesting(piece, pages, usable_box, usable_w, usable_h, page_width, page_height)
+        _place_piece_nesting(
+            piece,
+            pages,
+            usable_box,
+            usable_w,
+            usable_h,
+            page_width,
+            page_height,
+            gap_mm=gap_mm,
+        )
 
     pages = [page for page in pages if page.placed_pieces]
 
@@ -71,9 +152,13 @@ def _place_piece_nesting(
     usable_h: float,
     page_width: float,
     page_height: float,
+    *,
+    gap_mm: float,
 ) -> None:
     for page in pages:
-        placement = _find_placement_on_page(piece, page, usable_box, usable_w, usable_h)
+        placement = _find_placement_on_page(
+            piece, page, usable_box, usable_w, usable_h, gap_mm=gap_mm
+        )
         if placement is not None:
             normalized, _rotation, x, y = placement
             placed_piece = translate_piece(normalized, x, y)
@@ -89,7 +174,9 @@ def _place_piece_nesting(
         placed_pieces=[],
     )
     pages.append(new_page)
-    placement = _find_placement_on_page(piece, new_page, usable_box, usable_w, usable_h)
+    placement = _find_placement_on_page(
+        piece, new_page, usable_box, usable_w, usable_h, gap_mm=gap_mm
+    )
     if placement is not None:
         normalized, _rotation, x, y = placement
         placed_piece = translate_piece(normalized, x, y)
@@ -115,15 +202,17 @@ def _find_placement_on_page(
     usable_box: Polygon,
     usable_w: float,
     usable_h: float,
+    *,
+    gap_mm: float,
 ) -> tuple[UnfoldPiece, int, float, float] | None:
     placed_polys: list[Polygon] = []
     for placed in page.placed_pieces:
-        poly = piece_to_shapely(placed.piece, include_tabs=True, gap_buffer=GAP_MM * 0.35)
+        poly = piece_to_shapely(placed.piece, include_tabs=True, gap_buffer=gap_mm * 0.35)
         if not poly.is_empty:
             placed_polys.append(poly)
 
     tree = STRtree(placed_polys) if placed_polys else None
-    candidates = _candidate_positions(placed_polys, usable_w, usable_h)
+    candidates = _candidate_positions(placed_polys, usable_w, usable_h, gap_mm=gap_mm)
 
     best: tuple[float, UnfoldPiece, int, float, float] | None = None
 
@@ -184,6 +273,8 @@ def _candidate_positions(
     placed: list[Polygon],
     usable_w: float,
     usable_h: float,
+    *,
+    gap_mm: float,
 ) -> list[tuple[float, float]]:
     """Bottom-left candidate anchors from page origin and placed piece corners."""
     xs = {MARGIN_MM}
@@ -191,8 +282,8 @@ def _candidate_positions(
 
     for poly in placed:
         minx, miny, maxx, maxy = poly.bounds
-        xs.update((minx, maxx + GAP_MM))
-        ys.update((miny, maxy + GAP_MM))
+        xs.update((minx, maxx + gap_mm))
+        ys.update((miny, maxy + gap_mm))
 
     xs = sorted(x for x in xs if MARGIN_MM <= x <= MARGIN_MM + usable_w)
     ys = sorted(y for y in ys if MARGIN_MM <= y <= MARGIN_MM + usable_h)

@@ -6,7 +6,7 @@ from app.config import settings as app_settings
 from app.models.geometry import PipelineResult
 from app.schemas.model import ProjectSettings
 from app.services.craftability_scorer import compute_craftability
-from app.services.layout_engine import layout_pieces
+from app.services.layout_repair import collect_layout_warnings, layout_with_repair
 from app.services.mesh_cleaner import clean_mesh, mesh_quality_issues
 from app.services.mesh_simplifier import scale_to_target_height, simplify_mesh
 from app.services.model_loader import load_mesh
@@ -51,7 +51,9 @@ def run_pipeline(
     if settings.add_tabs:
         pieces = optimize_pieces_cut_outlines(pieces)
 
-    pages = layout_pieces(pieces, settings.paper_size)
+    layout_result = layout_with_repair(pieces, settings.paper_size)
+    pages = layout_result.pages
+    layout_warnings = collect_layout_warnings(layout_result)
 
     processed_path = app_settings.processed_dir / f"{project_id}.glb"
     mesh.export(processed_path)
@@ -67,7 +69,9 @@ def run_pipeline(
         pieces,
         pages,
         settings.difficulty,
-        quality_warnings + unfold_warnings,
+        quality_warnings + unfold_warnings + layout_warnings,
+        layout_has_overlaps=layout_result.has_overlaps,
+        layout_scaled_labels=layout_result.scaled_piece_labels,
     )
 
     zip_path = app_settings.exports_dir / f"{project_id}.zip"
@@ -107,6 +111,7 @@ def run_pipeline(
         craftability_score=craft_score,
         craftability_level=craft_level,
         warnings=craft_warnings,
+        export_blocked=False,
     )
 
 

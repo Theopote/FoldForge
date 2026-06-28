@@ -336,6 +336,102 @@ def _build_piece_from_vertices(
     )
 
 
+def compute_unfold_vertex_map(
+    mesh: trimesh.Trimesh,
+    face_indices: list[int],
+    dihedral: EdgeDihedralData,
+) -> tuple[dict[int, Point2D], bool]:
+    """Run LSCM/BFS unfold and return 2D vertex positions plus overlap flag."""
+    vertex_2d = _unfold_patch_lscm(mesh, face_indices)
+    has_overlap = False
+
+    if vertex_2d is not None:
+        has_overlap = _vertex_map_has_overlap(mesh, face_indices, vertex_2d)
+
+    if vertex_2d is None or has_overlap:
+        vertex_2d, bfs_overlap = _unfold_patch_bfs(mesh, face_indices, dihedral)
+        has_overlap = bfs_overlap or _vertex_map_has_overlap(mesh, face_indices, vertex_2d)
+
+    return vertex_2d, has_overlap
+
+
+def find_overlapping_face_pairs(
+    mesh: trimesh.Trimesh,
+    face_indices: list[int],
+    vertex_2d: dict[int, Point2D],
+) -> list[tuple[int, int, float]]:
+    """Return face pairs whose 2D triangles overlap, with intersection area (mm²)."""
+    polys: dict[int, Polygon | None] = {}
+    for face_idx in face_indices:
+        polys[face_idx] = _face_polygon_2d(mesh, face_idx, vertex_2d)
+
+    pairs: list[tuple[int, int, float]] = []
+    for i, f1 in enumerate(face_indices):
+        p1 = polys.get(f1)
+        if p1 is None:
+            continue
+        for f2 in face_indices[i + 1 :]:
+            p2 = polys.get(f2)
+            if p2 is None:
+                continue
+            if not p1.intersects(p2):
+                continue
+            if p1.touches(p2):
+                continue
+            intersection = p1.intersection(p2)
+            if intersection.area > OVERLAP_AREA_THRESHOLD_MM2:
+                pairs.append((f1, f2, float(intersection.area)))
+
+    return pairs
+
+
+def _shared_interior_edge(
+    mesh: trimesh.Trimesh,
+    face_a: int,
+    face_b: int,
+) -> tuple[int, int] | None:
+    for (f1, f2), (v0, v1) in zip(mesh.face_adjacency, mesh.face_adjacency_edges):
+        pair = {int(f1), int(f2)}
+        if pair == {face_a, face_b}:
+            return _edge_key(int(v0), int(v1))
+    return None
+
+
+def score_seams_by_overlap(
+    mesh: trimesh.Trimesh,
+    face_indices: list[int],
+    vertex_2d: dict[int, Point2D],
+) -> dict[tuple[int, int], float]:
+    """
+    Rank interior patch edges by how much overlap they are adjacent to.
+
+    Shared edges between overlapping faces get the highest scores.
+    """
+    from collections import defaultdict
+
+    patch_set = set(face_indices)
+    scores: dict[tuple[int, int], float] = defaultdict(float)
+    pairs = find_overlapping_face_pairs(mesh, face_indices, vertex_2d)
+    if not pairs:
+        return {}
+
+    adjacency = _build_face_adjacency(mesh)
+
+    for f1, f2, area in pairs:
+        shared = _shared_interior_edge(mesh, f1, f2)
+        if shared is not None:
+            scores[shared] += area * 3.0
+            continue
+
+        for face in (f1, f2):
+            for neighbor, v0, v1 in adjacency.get(face, []):
+                if neighbor not in patch_set:
+                    continue
+                scores[_edge_key(v0, v1)] += area
+
+    return dict(scores)
+
+
 def unfold_patch(
     mesh: trimesh.Trimesh,
     face_indices: list[int],
@@ -348,15 +444,7 @@ def unfold_patch(
     if not face_indices:
         raise ValueError("Patch has no faces.")
 
-    vertex_2d = _unfold_patch_lscm(mesh, face_indices)
-    has_overlap = False
-
-    if vertex_2d is not None:
-        has_overlap = _vertex_map_has_overlap(mesh, face_indices, vertex_2d)
-
-    if vertex_2d is None or has_overlap:
-        vertex_2d, bfs_overlap = _unfold_patch_bfs(mesh, face_indices, dihedral)
-        has_overlap = bfs_overlap or _vertex_map_has_overlap(mesh, face_indices, vertex_2d)
+    vertex_2d, has_overlap = compute_unfold_vertex_map(mesh, face_indices, dihedral)
 
     return _build_piece_from_vertices(
         mesh,

@@ -27,6 +27,9 @@ CONCAVE_SEAM_BONUS = 0.25
 # Balance weight when splitting oversized patches (0–1)
 SPLIT_BALANCE_WEIGHT = 0.35
 
+# Weight for overlap-area seam hints during auto-repair (mm² → score)
+OVERLAP_SEAM_SCORE_WEIGHT = 0.15
+
 
 @dataclass(frozen=True)
 class EdgeDihedralData:
@@ -152,11 +155,13 @@ def find_best_split_seam_in_patch(
     seams: set[tuple[int, int]],
     face_indices: list[int],
     dihedral: EdgeDihedralData,
+    *,
+    overlap_edge_scores: dict[tuple[int, int], float] | None = None,
 ) -> tuple[int, int] | None:
     """
     Pick an interior edge to split a patch (repair seam for unfold overlaps).
 
-    Prefers sharp, hidden creases and balanced sub-patches.
+    Prefers overlap-heavy edges, sharp hidden creases, and balanced sub-patches.
     """
     if len(face_indices) <= 1:
         return None
@@ -165,6 +170,7 @@ def find_best_split_seam_in_patch(
     patch_set = set(face_indices)
     best_edge: tuple[int, int] | None = None
     best_score = -1.0
+    overlap_hints = overlap_edge_scores or {}
 
     for f1, f2, key in interior_edges:
         if f1 not in patch_set or f2 not in patch_set:
@@ -178,7 +184,8 @@ def find_best_split_seam_in_patch(
 
         preference = _seam_preference_score(key, dihedral)
         balance = _split_balance_score(len(face_indices), side_a, side_b)
-        score = preference + balance * SPLIT_BALANCE_WEIGHT
+        overlap_hint = overlap_hints.get(key, 0.0) * OVERLAP_SEAM_SCORE_WEIGHT
+        score = preference + balance * SPLIT_BALANCE_WEIGHT + overlap_hint
 
         if score > best_score:
             best_score = score
