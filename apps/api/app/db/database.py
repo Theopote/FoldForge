@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,6 +14,17 @@ from app.config import settings
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    source_type TEXT NOT NULL DEFAULT 'upload_3d',
+    status TEXT NOT NULL DEFAULT 'created',
+    source_file_url TEXT,
+    processed_model_url TEXT,
+    unfold_pdf_url TEXT,
+    unfold_svg_url TEXT,
+    unfold_zip_url TEXT,
+    settings_json TEXT NOT NULL DEFAULT '{}',
+    stats_json TEXT,
+    craftability_json TEXT,
     data TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -51,6 +63,29 @@ CREATE INDEX IF NOT EXISTS idx_process_jobs_status
     ON process_jobs(status);
 """
 
+_PROJECT_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_projects_status
+    ON projects(status);
+
+CREATE INDEX IF NOT EXISTS idx_projects_created_at
+    ON projects(created_at);
+"""
+
+# Columns added after the initial MVP schema (id, data, created_at, updated_at).
+_PROJECT_COLUMN_MIGRATIONS: tuple[tuple[str, str], ...] = (
+    ("name", "TEXT NOT NULL DEFAULT ''"),
+    ("source_type", "TEXT NOT NULL DEFAULT 'upload_3d'"),
+    ("status", "TEXT NOT NULL DEFAULT 'created'"),
+    ("source_file_url", "TEXT"),
+    ("processed_model_url", "TEXT"),
+    ("unfold_pdf_url", "TEXT"),
+    ("unfold_svg_url", "TEXT"),
+    ("unfold_zip_url", "TEXT"),
+    ("settings_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("stats_json", "TEXT"),
+    ("craftability_json", "TEXT"),
+)
+
 
 class Database:
     """Thread-safe SQLite access for FoldForge MVP persistence."""
@@ -81,6 +116,66 @@ class Database:
     def _init_schema(self) -> None:
         with self.connection() as conn:
             conn.executescript(_SCHEMA)
+            self._migrate_projects_table(conn)
+            conn.executescript(_PROJECT_INDEXES)
+
+    def _migrate_projects_table(self, conn: sqlite3.Connection) -> None:
+        """Add indexed project columns and backfill from legacy JSON snapshots."""
+        existing = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
+        for column_name, column_def in _PROJECT_COLUMN_MIGRATIONS:
+            if column_name not in existing:
+                conn.execute(
+                    f"ALTER TABLE projects ADD COLUMN {column_name} {column_def}"
+                )
+
+        rows = conn.execute(
+            """
+            SELECT id, data, name, source_type, status
+            FROM projects
+            WHERE data IS NOT NULL AND data != ''
+            """
+        ).fetchall()
+        for row in rows:
+            if row["name"]:
+                continue
+            try:
+                payload = json.loads(row["data"])
+            except json.JSONDecodeError:
+                continue
+            settings = payload.get("settings")
+            stats = payload.get("stats")
+            craftability = payload.get("craftability")
+            conn.execute(
+                """
+                UPDATE projects SET
+                    name = ?,
+                    source_type = ?,
+                    status = ?,
+                    source_file_url = ?,
+                    processed_model_url = ?,
+                    unfold_pdf_url = ?,
+                    unfold_svg_url = ?,
+                    unfold_zip_url = ?,
+                    settings_json = ?,
+                    stats_json = ?,
+                    craftability_json = ?
+                WHERE id = ?
+                """,
+                (
+                    payload.get("name") or "",
+                    payload.get("sourceType") or "upload_3d",
+                    payload.get("status") or "created",
+                    payload.get("sourceFileUrl"),
+                    payload.get("processedModelUrl"),
+                    payload.get("unfoldPdfUrl"),
+                    payload.get("unfoldSvgUrl"),
+                    payload.get("unfoldZipUrl"),
+                    json.dumps(settings if settings is not None else {}),
+                    json.dumps(stats) if stats is not None else None,
+                    json.dumps(craftability) if craftability is not None else None,
+                    row["id"],
+                ),
+            )
 
 
 database = Database(settings.database_path)
