@@ -10,7 +10,24 @@ from app.schemas.job import JobStatus
 
 
 @pytest.mark.asyncio
-async def test_cancel_queued_process_job(api_client, fixtures_dir: Path) -> None:
+async def test_cancel_queued_process_job(
+    api_client,
+    monkeypatch: pytest.MonkeyPatch,
+    fixtures_dir: Path,
+) -> None:
+    import asyncio
+
+    from app.services.process_queue import ProcessQueue
+
+    worker_gate = asyncio.Event()
+    original_process = ProcessQueue._process_job
+
+    async def gated_process(self, job_id: str) -> None:
+        await worker_gate.wait()
+        await original_process(self, job_id)
+
+    monkeypatch.setattr(ProcessQueue, "_process_job", gated_process)
+
     fixture = fixtures_dir / "cube.stl"
     assert fixture.exists()
 
@@ -41,6 +58,10 @@ async def test_cancel_queued_process_job(api_client, fixtures_dir: Path) -> None
     assert process.status_code == 202
     job_id = process.json()["jobId"]
 
+    poll = await api_client.get(f"/api/process-jobs/{job_id}")
+    assert poll.status_code == 200
+    assert poll.json()["status"] == JobStatus.QUEUED.value
+
     cancel = await api_client.post(f"/api/process-jobs/{job_id}/cancel")
     assert cancel.status_code == 200
     payload = cancel.json()
@@ -49,6 +70,8 @@ async def test_cancel_queued_process_job(api_client, fixtures_dir: Path) -> None
     poll = await api_client.get(f"/api/process-jobs/{job_id}")
     assert poll.status_code == 200
     assert poll.json()["status"] == JobStatus.CANCELLED.value
+
+    worker_gate.set()
 
 
 @pytest.mark.asyncio

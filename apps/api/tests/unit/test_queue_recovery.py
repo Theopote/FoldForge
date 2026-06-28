@@ -26,6 +26,16 @@ def queue_env(tmp_path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.services.process_job_store.database", test_db)
     monkeypatch.setattr("app.services.ai.job_store.database", test_db)
 
+    now = datetime.now(timezone.utc).isoformat()
+    with test_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO projects (id, data, created_at, updated_at)
+            VALUES ('proj001', '{}', ?, ?), ('proj002', '{}', ?, ?)
+            """,
+            (now, now, now, now),
+        )
+
     return {
         "process_store": ProcessJobStore(),
         "generation_store": GenerationJobStore(),
