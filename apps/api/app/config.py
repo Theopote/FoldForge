@@ -28,7 +28,10 @@ class Settings(BaseSettings):
 
     max_upload_size_mb: int = 50
     max_image_size_mb: int = 10
-    allowed_extensions: set[str] = {".obj", ".stl", ".glb", ".gltf", ".fbx"}
+    # Official MVP formats (Trimesh + Three.js preview)
+    supported_extensions: set[str] = {".obj", ".stl", ".glb", ".gltf"}
+    # Accepted by Trimesh in some builds but unreliable — not offered in UI/API MVP
+    experimental_extensions: set[str] = {".fbx"}
     allowed_image_extensions: set[str] = {".jpg", ".jpeg", ".png", ".webp"}
 
     # AI generation (Phase 2+)

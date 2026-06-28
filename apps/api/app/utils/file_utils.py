@@ -23,11 +23,19 @@ def validate_upload_file(file: UploadFile) -> str:
         raise HTTPException(status_code=400, detail="Filename is required.")
 
     extension = Path(file.filename).suffix.lower()
-    if extension not in settings.allowed_extensions:
-        allowed = ", ".join(sorted(settings.allowed_extensions))
+    if extension in settings.experimental_extensions:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{extension}'. Allowed: {allowed}",
+            detail=(
+                f"Format '{extension}' is experimental and not supported in MVP "
+                "(Trimesh FBX import is unreliable). Convert to OBJ, STL, GLB, or GLTF."
+            ),
+        )
+    if extension not in settings.supported_extensions:
+        allowed = ", ".join(ext.lstrip(".") for ext in sorted(settings.supported_extensions))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{extension}'. Supported: {allowed.upper()}",
         )
     return extension
 

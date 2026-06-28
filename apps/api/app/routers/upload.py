@@ -16,7 +16,7 @@ router = APIRouter()
 @router.post("/upload-model", response_model=UploadModelResponse)
 async def upload_model(file: UploadFile = File(...)) -> UploadModelResponse:
     """
-    Accept a 3D model upload (OBJ / STL / GLB) and create a project record.
+    Accept a 3D model upload (OBJ / STL / GLB / GLTF) and create a project record.
 
     Returns projectId and storage URL for the uploaded source file.
     """

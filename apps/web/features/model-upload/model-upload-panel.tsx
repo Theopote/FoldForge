@@ -114,7 +114,7 @@ export function ModelUploadPanel() {
           <Upload className="mb-3 h-8 w-8 text-primary" />
         )}
         <p className="text-sm font-medium">
-          Drop OBJ / STL / GLB here, or click to browse
+          Drop OBJ / STL / GLB / GLTF here, or click to browse
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           Max 50 MB · Triangulated meshes work best

@@ -6,7 +6,7 @@ FoldForge helps ordinary users — hobbyists, parents, educators — turn ideas 
 
 ## MVP Scope
 
-1. Upload 3D model (OBJ / STL / GLB)
+1. Upload 3D model (OBJ / STL / GLB / GLTF)
 2. Preview in browser
 3. Auto clean, decimate, unfold
 4. Add tabs, numbers, fold/cut lines

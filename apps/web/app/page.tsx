@@ -103,7 +103,7 @@ export default function HomePage() {
           </div>
 
           <div className="mx-auto mt-16 grid max-w-4xl gap-4 sm:grid-cols-3">
-            <HeroStat icon={Box} label="3D Upload" value="OBJ · STL · GLB" />
+            <HeroStat icon={Box} label="3D Upload" value="OBJ · STL · GLB · GLTF" />
             <HeroStat icon={Layers} label="Smart Unfold" value="Tabs & Numbers" />
             <HeroStat icon={Printer} label="Print Ready" value="PDF · SVG · ZIP" />
           </div>

@@ -23,7 +23,9 @@ Content-Type: multipart/form-data
 
 | Field | Type | Description |
 |-------|------|-------------|
-| file | file | OBJ, STL, GLB, GLTF, FBX |
+| file | file | OBJ, STL, GLB, GLTF |
+
+**Experimental (not supported in MVP):** FBX — Trimesh import is unreliable; convert to OBJ/STL/GLB before upload.
 
 Response:
 

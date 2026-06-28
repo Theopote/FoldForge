@@ -104,7 +104,7 @@ Open:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check |
-| POST | `/api/upload-model` | Upload OBJ / STL / GLB |
+| POST | `/api/upload-model` | Upload OBJ / STL / GLB / GLTF |
 | POST | `/api/generate-from-text` | AI text → 3D (Phase 2) |
 | POST | `/api/generate-from-image` | AI image → 3D (Phase 2) |
 | GET | `/api/ai/providers` | List AI providers |

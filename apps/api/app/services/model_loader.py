@@ -8,7 +8,10 @@ import trimesh
 
 def load_mesh(path: Path) -> trimesh.Trimesh:
     """
-    Load OBJ / STL / GLB and return a single Trimesh.
+    Load OBJ / STL / GLB / GLTF and return a single Trimesh.
+
+    Other formats (e.g. FBX) are not officially supported; Trimesh may load them
+    inconsistently and the pipeline does not target them in MVP.
 
     Raises ValueError if the file cannot be loaded as a mesh.
     """
