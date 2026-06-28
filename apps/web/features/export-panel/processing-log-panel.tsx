@@ -9,22 +9,46 @@ import { useStudioStore } from "@/store/studio-store";
 const STATUS_PROGRESS: Record<string, number> = {
   created: 0,
   uploaded: 25,
-  processing: 60,
+  processing: 10,
   ready: 100,
   failed: 100,
 };
 
+const JOB_PHASE_LABEL: Record<string, string> = {
+  ai_generation: "AI generation",
+  papercraft_process: "Papercraft pipeline",
+};
+
 export function ProcessingLogPanel() {
-  const { status, logs, error, craftability } = useStudioStore();
+  const {
+    status,
+    logs,
+    error,
+    craftability,
+    jobPhase,
+    jobProgress,
+    jobMessage,
+  } = useStudioStore();
+
+  const isJobActive = jobPhase !== "idle";
+  const progressValue = isJobActive ? jobProgress : (STATUS_PROGRESS[status] ?? 0);
+  const statusLabel = isJobActive
+    ? `${JOB_PHASE_LABEL[jobPhase] ?? "Working"} · ${jobProgress}%`
+    : status;
 
   return (
     <Card className="border-border/70 shadow-none">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-4">
           <CardTitle className="text-base">Processing Log</CardTitle>
-          <span className="text-xs capitalize text-muted-foreground">{status}</span>
+          <span className="text-xs capitalize text-muted-foreground">
+            {statusLabel}
+          </span>
         </div>
-        <Progress value={STATUS_PROGRESS[status] ?? 0} className="mt-2" />
+        <Progress value={progressValue} className="mt-2" />
+        {isJobActive && jobMessage && (
+          <p className="mt-2 text-xs text-muted-foreground">{jobMessage}</p>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {error && (

@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/select";
 import { generateFromText } from "@/lib/api";
 import { pollGenerationJob } from "@/lib/generation-job";
+import {
+  clearJobProgressTracking,
+  reportJobProgress,
+} from "@/lib/job-progress";
 import { useStudioStore } from "@/store/studio-store";
 import type { Style } from "@/types";
 
@@ -30,10 +34,9 @@ export function TextToModelPanel() {
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<Style>("low_poly");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressMessage, setProgressMessage] = useState("");
-  const { setGenerationResult, setAsyncGenerationPending, addLog, setError } =
+  const { jobPhase, jobProgress, jobMessage, setGenerationResult, setAsyncGenerationPending, addLog, setError } =
     useStudioStore();
+  const showAiProgress = isGenerating && jobPhase === "ai_generation";
 
   const handleGenerate = async () => {
     if (prompt.trim().length < 3) {
@@ -42,8 +45,7 @@ export function TextToModelPanel() {
     }
 
     setIsGenerating(true);
-    setProgress(0);
-    setProgressMessage("");
+    clearJobProgressTracking();
     setError(null);
     addLog(`Generating 3D model from text: "${prompt.slice(0, 60)}..."`);
 
@@ -64,10 +66,10 @@ export function TextToModelPanel() {
           aiProvider: data.aiProvider,
         });
         addLog(`Queued (${aiProvider}). Job: ${data.jobId}`);
+        reportJobProgress("ai_generation", 0, "Queued for generation");
         const job = await pollGenerationJob(data.jobId, {
           onProgress: (update) => {
-            setProgress(update.progress);
-            setProgressMessage(update.message);
+            reportJobProgress("ai_generation", update.progress, update.message);
           },
         });
         sourceFileUrl = job.sourceFileUrl;
@@ -92,15 +94,15 @@ export function TextToModelPanel() {
       if (enhancedPrompt) {
         addLog("Enhanced prompt applied for papercraft style.");
       }
+      clearJobProgressTracking();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Text generation failed.";
       setError(message);
+      clearJobProgressTracking();
       addLog(`Error: ${message}`);
     } finally {
       setIsGenerating(false);
-      setProgress(0);
-      setProgressMessage("");
     }
   };
 
@@ -158,16 +160,16 @@ export function TextToModelPanel() {
         </div>
       </div>
 
-      {isGenerating && progress > 0 && (
+      {showAiProgress && jobProgress > 0 && (
         <div className="space-y-1 rounded-xl border bg-muted/40 px-3 py-2">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{progressMessage || "Generating…"}</span>
-            <span>{progress}%</span>
+            <span>{jobMessage || "Generating…"}</span>
+            <span>{jobProgress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${jobProgress}%` }}
             />
           </div>
         </div>
@@ -181,7 +183,9 @@ export function TextToModelPanel() {
         {isGenerating ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {progress > 0 ? `Generating 3D… ${progress}%` : "Generating 3D…"}
+            {showAiProgress && jobProgress > 0
+              ? `Generating 3D… ${jobProgress}%`
+              : "Generating 3D…"}
           </>
         ) : (
           <>

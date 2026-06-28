@@ -59,6 +59,9 @@ type StudioState = {
   craftability: CraftabilityScore | null;
   logs: string[];
   error: string | null;
+  jobPhase: "idle" | "ai_generation" | "papercraft_process";
+  jobProgress: number;
+  jobMessage: string;
   setSourceType: (sourceType: SourceType) => void;
   setUploadResult: (payload: {
     projectId: string;
@@ -83,6 +86,12 @@ type StudioState = {
   restoreProject: (saved: SavedStudioProject) => void;
   addLog: (message: string) => void;
   setError: (message: string | null) => void;
+  setJobProgress: (payload: {
+    phase: "idle" | "ai_generation" | "papercraft_process";
+    progress: number;
+    message: string;
+  }) => void;
+  clearJobProgress: () => void;
   reset: () => void;
 };
 
@@ -109,6 +118,9 @@ const initialState = {
   craftability: null,
   logs: [] as string[],
   error: null,
+  jobPhase: "idle" as const,
+  jobProgress: 0,
+  jobMessage: "",
 };
 
 function applyGenerationReset() {
@@ -296,5 +308,9 @@ export const useStudioStore = create<StudioState>((set) => ({
       logs: [...state.logs, `[${new Date().toLocaleTimeString()}] ${message}`],
     })),
   setError: (error) => set({ error }),
+  setJobProgress: ({ phase, progress, message }) =>
+    set({ jobPhase: phase, jobProgress: progress, jobMessage: message }),
+  clearJobProgress: () =>
+    set({ jobPhase: "idle", jobProgress: 0, jobMessage: "" }),
   reset: () => set(initialState),
 }));

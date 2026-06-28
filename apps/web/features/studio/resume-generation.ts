@@ -4,6 +4,10 @@ import {
 } from "@/lib/api";
 import type { GenerationJobResponse } from "@/lib/generation-job";
 import { pollGenerationJob } from "@/lib/generation-job";
+import {
+  clearJobProgressTracking,
+  reportJobProgress,
+} from "@/lib/job-progress";
 import { useStudioStore } from "@/store/studio-store";
 import type { ProjectStatus } from "@/types";
 
@@ -31,6 +35,7 @@ function applyCompletedGenerationJob(job: GenerationJobResponse): void {
     enhancedPrompt: job.enhancedPrompt,
   });
   addLog(`AI model ready (${job.provider}). Project: ${projectId}`);
+  clearJobProgressTracking();
 }
 
 /** Continue polling an async AI job after the page reloads. */
@@ -54,7 +59,11 @@ export async function resumeGenerationJob(jobId: string): Promise<void> {
   addLog(`Resuming AI generation (job ${jobId})...`);
 
   try {
-    const job = await pollGenerationJob(jobId);
+    const job = await pollGenerationJob(jobId, {
+      onProgress: (update) => {
+        reportJobProgress("ai_generation", update.progress, update.message);
+      },
+    });
 
     if (!job.sourceFileUrl) {
       throw new Error("Generation completed but no model URL was returned.");
@@ -71,12 +80,14 @@ export async function resumeGenerationJob(jobId: string): Promise<void> {
       enhancedPrompt: job.enhancedPrompt,
     });
     addLog(`AI model ready (${job.provider}). Project: ${projectId}`);
+    clearJobProgressTracking();
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Generation resume failed.";
     setError(message);
     setStatus("failed");
     setActiveJobId(null);
+    clearJobProgressTracking();
     addLog(`Error: ${message}`);
   }
 }
@@ -110,12 +121,14 @@ export async function resumeGenerationIfNeeded(
         setStatus("failed");
         setError(job.error ?? "AI generation failed.");
         setActiveJobId(null);
+        clearJobProgressTracking();
         addLog(`Error: ${job.error ?? "AI generation failed."}`);
         return;
       }
 
       jobId = job.jobId;
       useStudioStore.getState().setActiveJobId(jobId);
+      reportJobProgress("ai_generation", job.progress, job.message);
     } catch (error) {
       if (error instanceof GenerationJobNotFoundError) return;
       // Network or server error — cannot resolve jobId without the backend.

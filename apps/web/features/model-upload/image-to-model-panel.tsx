@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/select";
 import { generateFromImage } from "@/lib/api";
 import { pollGenerationJob } from "@/lib/generation-job";
+import {
+  clearJobProgressTracking,
+  reportJobProgress,
+} from "@/lib/job-progress";
 import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { Style } from "@/types";
@@ -29,10 +33,9 @@ export function ImageToModelPanel() {
   const [hint, setHint] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressMessage, setProgressMessage] = useState("");
-  const { setGenerationResult, setAsyncGenerationPending, addLog, setError } =
+  const { jobPhase, jobProgress, jobMessage, setGenerationResult, setAsyncGenerationPending, addLog, setError } =
     useStudioStore();
+  const showAiProgress = isGenerating && jobPhase === "ai_generation";
 
   const handleFile = useCallback((file: File | null) => {
     if (!file) return;
@@ -47,8 +50,7 @@ export function ImageToModelPanel() {
     }
 
     setIsGenerating(true);
-    setProgress(0);
-    setProgressMessage("");
+    clearJobProgressTracking();
     setError(null);
     addLog(`Generating 3D model from image: ${selectedFile.name}`);
 
@@ -75,10 +77,10 @@ export function ImageToModelPanel() {
           aiProvider: data.aiProvider,
         });
         addLog(`Queued (${aiProvider}). Job: ${data.jobId}`);
+        reportJobProgress("ai_generation", 0, "Queued for generation");
         const job = await pollGenerationJob(data.jobId, {
           onProgress: (update) => {
-            setProgress(update.progress);
-            setProgressMessage(update.message);
+            reportJobProgress("ai_generation", update.progress, update.message);
           },
         });
         sourceFileUrl = job.sourceFileUrl;
@@ -102,15 +104,15 @@ export function ImageToModelPanel() {
         enhancedPrompt,
       });
       addLog(`AI model ready (${aiProvider}). Project: ${data.projectId}`);
+      clearJobProgressTracking();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Image generation failed.";
       setError(message);
+      clearJobProgressTracking();
       addLog(`Error: ${message}`);
     } finally {
       setIsGenerating(false);
-      setProgress(0);
-      setProgressMessage("");
     }
   };
 
@@ -196,16 +198,16 @@ export function ImageToModelPanel() {
         </Select>
       </div>
 
-      {isGenerating && progress > 0 && (
+      {showAiProgress && jobProgress > 0 && (
         <div className="space-y-1 rounded-xl border bg-muted/40 px-3 py-2">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{progressMessage || "Generating…"}</span>
-            <span>{progress}%</span>
+            <span>{jobMessage || "Generating…"}</span>
+            <span>{jobProgress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${jobProgress}%` }}
             />
           </div>
         </div>

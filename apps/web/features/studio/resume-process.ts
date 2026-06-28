@@ -4,6 +4,10 @@ import {
 } from "@/lib/api";
 import type { ProcessJobResponse } from "@/lib/process-job";
 import { pollProcessJob } from "@/lib/process-job";
+import {
+  clearJobProgressTracking,
+  reportJobProgress,
+} from "@/lib/job-progress";
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore, ProjectStatus } from "@/types";
 
@@ -21,6 +25,7 @@ function applyCompletedProcessJob(job: ProcessJobResponse): void {
   });
   setStatus((job.resultStatus as ProjectStatus) ?? "ready");
   setActiveProcessJobId(null);
+  clearJobProgressTracking();
   addLog("Papercraft template ready.");
 
   if (job.stats) {
@@ -49,6 +54,7 @@ export async function resumeProcessJob(jobId: string): Promise<void> {
     const job = await pollProcessJob(jobId, {
       onProgress: (update) => {
         setActiveProcessJobId(update.jobId);
+        reportJobProgress("papercraft_process", update.progress, update.message);
       },
     });
     applyCompletedProcessJob(job);
@@ -58,6 +64,7 @@ export async function resumeProcessJob(jobId: string): Promise<void> {
     setError(message);
     setStatus("failed");
     setActiveProcessJobId(null);
+    clearJobProgressTracking();
     addLog(`Error: ${message}`);
   }
 }
@@ -90,12 +97,14 @@ export async function resumeProcessIfNeeded(
         setStatus("failed");
         setError(job.error ?? "Papercraft processing failed.");
         setActiveProcessJobId(null);
+        clearJobProgressTracking();
         addLog(`Error: ${job.error ?? "Papercraft processing failed."}`);
         return;
       }
 
       jobId = job.jobId;
       useStudioStore.getState().setActiveProcessJobId(jobId);
+      reportJobProgress("papercraft_process", job.progress, job.message);
     } catch (error) {
       if (error instanceof ProcessJobNotFoundError) return;
       return;

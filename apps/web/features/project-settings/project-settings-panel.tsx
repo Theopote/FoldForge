@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +16,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { processModel } from "@/lib/api";
+import {
+  clearJobProgressTracking,
+  reportJobProgress,
+} from "@/lib/job-progress";
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore } from "@/types";
 
@@ -33,9 +36,6 @@ export function ProjectSettingsPanel() {
     setActiveProcessJobId,
   } = useStudioStore();
 
-  const [progress, setProgress] = useState(0);
-  const [progressMessage, setProgressMessage] = useState("");
-
   const handleGenerate = async () => {
     if (!projectId) {
       setError("Please upload or generate a 3D model first.");
@@ -44,20 +44,20 @@ export function ProjectSettingsPanel() {
 
     setError(null);
     setStatus("processing");
-    setProgress(0);
-    setProgressMessage("Queued");
+    clearJobProgressTracking();
+    reportJobProgress("papercraft_process", 0, "Queued");
     addLog("Starting papercraft generation...");
 
     try {
       const data = await processModel(projectId, settings, {
         onProgress: (job) => {
-          setProgress(job.progress);
-          setProgressMessage(job.message);
           setActiveProcessJobId(job.jobId);
+          reportJobProgress("papercraft_process", job.progress, job.message);
         },
       });
 
       setActiveProcessJobId(null);
+      clearJobProgressTracking();
       setResults({
         processedModelUrl: data.processedModelUrl,
         unfoldSvgUrl: data.unfoldSvgUrl,
@@ -87,10 +87,8 @@ export function ProjectSettingsPanel() {
       setError(message);
       setStatus("failed");
       setActiveProcessJobId(null);
+      clearJobProgressTracking();
       addLog(`Error: ${message}`);
-    } finally {
-      setProgress(0);
-      setProgressMessage("");
     }
   };
 
@@ -225,18 +223,8 @@ export function ProjectSettingsPanel() {
           disabled={!projectId || status === "processing"}
           onClick={() => void handleGenerate()}
         >
-          {status === "processing"
-            ? progress > 0
-              ? `Generating… ${progress}%`
-              : "Generating..."
-            : "Generate Template"}
+          {status === "processing" ? "Generating template…" : "Generate Template"}
         </Button>
-
-        {status === "processing" && progressMessage && (
-          <p className="text-center text-xs text-muted-foreground">
-            {progressMessage}
-          </p>
-        )}
 
         {status === "ready" && projectId && (
           <Button variant="outline" className="w-full" asChild>
