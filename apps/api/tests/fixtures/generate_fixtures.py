@@ -16,8 +16,8 @@ def cube_stl() -> None:
 
 
 def low_poly_bunny_obj() -> None:
-    # Low-poly stand-in (~320 faces) until a decimated Stanford bunny is added.
-    mesh = trimesh.creation.icosphere(subdivisions=2, radius=30.0)
+    # Placeholder low-poly organic mesh (20-face icosphere) until a real bunny is added.
+    mesh = trimesh.creation.icosphere(subdivisions=0, radius=30.0)
     mesh.export(FIXTURES_DIR / "low_poly_bunny.obj")
 
 
