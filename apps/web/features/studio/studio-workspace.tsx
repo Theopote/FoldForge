@@ -8,7 +8,13 @@ import { ModelPreviewPanel } from "@/features/model-preview/model-preview-panel"
 import { CreateSourcePanel } from "@/features/model-upload/create-source-panel";
 import { ProjectSettingsPanel } from "@/features/project-settings/project-settings-panel";
 import { UnfoldPreviewPanel } from "@/features/unfold-preview/unfold-preview-panel";
-import { loadStudioProject } from "@/lib/project-storage";
+import { ProjectNotFoundError, getProject } from "@/lib/api";
+import {
+  clearStudioProject,
+  loadStudioProject,
+  projectDetailToSavedStudio,
+  saveStudioProject,
+} from "@/lib/project-storage";
 import { useStudioStore } from "@/store/studio-store";
 
 export function StudioWorkspace() {
@@ -21,8 +27,38 @@ export function StudioWorkspace() {
     const saved = loadStudioProject();
     if (!saved?.projectId) return;
 
-    restoreProject(saved);
-    addLog(`Restored last project: ${saved.projectName}`);
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const remote = await getProject(saved.projectId);
+        if (cancelled) return;
+
+        const payload = projectDetailToSavedStudio(remote, {
+          sourceFileName: saved.sourceFileName,
+        });
+        restoreProject({ ...payload, savedAt: saved.savedAt });
+        saveStudioProject(payload);
+        addLog(`Restored project: ${remote.name}`);
+      } catch (error) {
+        if (cancelled) return;
+
+        if (error instanceof ProjectNotFoundError) {
+          clearStudioProject();
+          addLog("Previous project no longer exists — starting fresh.");
+          return;
+        }
+
+        restoreProject(saved);
+        addLog(
+          `Restored from local cache (${saved.projectName}); server unavailable.`,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, restoreProject, addLog]);
 
   return (

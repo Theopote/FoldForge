@@ -20,7 +20,9 @@ build/
 .next/
 out/
 
-# Storage (uploaded files)
+# Storage (uploaded files + local SQLite DB)
+storage/foldforge.db
+storage/foldforge.db-*
 storage/uploads/*
 storage/processed/*
 storage/exports/*

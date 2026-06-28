@@ -1,5 +1,13 @@
 /** API response shapes for upload / project endpoints. */
 
+import type {
+  CraftabilityScore,
+  ProcessStats,
+  ProjectSettings,
+  ProjectStatus,
+  SourceType,
+} from "@/types";
+
 export type UploadModelResponse = {
   projectId: string;
   sourceFileUrl: string;
@@ -50,6 +58,34 @@ export type ApiErrorBody = {
   detail?: string | Array<{ msg?: string; type?: string }>;
 };
 
+export type ProjectDetailResponse = {
+  id: string;
+  name: string;
+  sourceType: SourceType;
+  sourceFileUrl?: string | null;
+  processedModelUrl?: string | null;
+  unfoldSvgUrl?: string | null;
+  unfoldPdfUrl?: string | null;
+  unfoldZipUrl?: string | null;
+  sourcePrompt?: string | null;
+  sourceImageUrl?: string | null;
+  aiProvider?: string | null;
+  enhancedPrompt?: string | null;
+  status: ProjectStatus;
+  settings: ProjectSettings;
+  stats?: ProcessStats | null;
+  craftability?: CraftabilityScore | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export class ProjectNotFoundError extends Error {
+  constructor(projectId: string) {
+    super(`Project not found: ${projectId}`);
+    this.name = "ProjectNotFoundError";
+  }
+}
+
 /**
  * Parse FastAPI error responses into a user-facing message.
  */
@@ -60,6 +96,24 @@ export function parseApiError(body: ApiErrorBody, fallback = "Request failed."):
     return detail.map((item) => item.msg ?? "Validation error").join("; ");
   }
   return fallback;
+}
+
+/**
+ * Fetch project metadata from the backend (source of truth).
+ */
+export async function getProject(projectId: string): Promise<ProjectDetailResponse> {
+  const response = await fetch(`/api/projects/${projectId}`);
+
+  if (response.status === 404) {
+    throw new ProjectNotFoundError(projectId);
+  }
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Failed to load project."));
+  }
+
+  return response.json() as Promise<ProjectDetailResponse>;
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { ProjectDetailResponse } from "@/lib/api";
 import type {
   CraftabilityScore,
   ProcessStats,
@@ -28,6 +29,46 @@ export type SavedStudioProject = {
   craftability: CraftabilityScore | null;
   savedAt: string;
 };
+
+function fileNameFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  try {
+    const path = new URL(url, "http://local").pathname;
+    const name = path.split("/").pop();
+    return name ? decodeURIComponent(name) : null;
+  } catch {
+    const name = url.split("/").pop();
+    return name ? decodeURIComponent(name) : null;
+  }
+}
+
+/** Map backend project payload into studio localStorage shape. */
+export function projectDetailToSavedStudio(
+  project: ProjectDetailResponse,
+  fallback?: Pick<SavedStudioProject, "sourceFileName">,
+): Omit<SavedStudioProject, "savedAt"> {
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    sourceType: project.sourceType,
+    sourceFileName:
+      fallback?.sourceFileName ?? fileNameFromUrl(project.sourceFileUrl ?? null),
+    sourceFileUrl: project.sourceFileUrl ?? null,
+    sourcePrompt: project.sourcePrompt ?? null,
+    sourceImageUrl: project.sourceImageUrl ?? null,
+    aiProvider: project.aiProvider ?? null,
+    enhancedPrompt: project.enhancedPrompt ?? null,
+    processedModelUrl: project.processedModelUrl ?? null,
+    unfoldSvgUrl: project.unfoldSvgUrl ?? null,
+    unfoldPdfUrl: project.unfoldPdfUrl ?? null,
+    unfoldZipUrl: project.unfoldZipUrl ?? null,
+    status: project.status,
+    settings: project.settings,
+    stats: project.stats ?? null,
+    craftability: project.craftability ?? null,
+  };
+}
 
 export function saveStudioProject(data: Omit<SavedStudioProject, "savedAt">): void {
   if (typeof window === "undefined") return;
