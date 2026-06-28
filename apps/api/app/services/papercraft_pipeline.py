@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.config import settings as app_settings
 from app.models.geometry import PipelineResult
-from app.schemas.model import ProjectSettings
+from app.schemas.model import ColorMode, ProjectSettings
 from app.services.cancel import CancelCheck, check_cancelled
 from app.services.craftability_scorer import compute_craftability
 from app.services.layout_repair import (
@@ -21,6 +21,7 @@ from app.services.seam_generator import compute_edge_dihedral_angles
 from app.services.svg_exporter import export_svg
 from app.services.outline_optimizer import optimize_pieces_cut_outlines
 from app.services.tab_generator import add_tabs_to_pieces
+from app.services.texture_baker import bake_piece_textures
 from app.services.unfold_repair import collect_unfold_warnings, unfold_with_auto_repair
 from app.services.zip_exporter import export_zip
 from app.utils.file_utils import build_storage_url
@@ -67,6 +68,10 @@ def run_pipeline(
     )
     pieces = unfold_result.pieces
     unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
+
+    if settings.color_mode == ColorMode.COLOR:
+        report(48, "Baking surface colors")
+        pieces, _bake_stats = bake_piece_textures(mesh, pieces, dihedral)
 
     report(55, "Adding tabs and cut lines")
     pieces = add_tabs_to_pieces(

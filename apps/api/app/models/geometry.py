@@ -39,6 +39,16 @@ class CutLine:
 
 
 @dataclass
+class BakedTriangle:
+    """Filled unfold triangle sampled from the source mesh surface."""
+
+    a: Point2D
+    b: Point2D
+    c: Point2D
+    fill: str
+
+
+@dataclass
 class UnfoldPiece:
     id: str
     face_ids: list[int]
@@ -49,6 +59,7 @@ class UnfoldPiece:
     label: str = ""
     has_overlap: bool = False
     cut_outline: list[Point2D] | None = None
+    baked_triangles: list[BakedTriangle] = field(default_factory=list)
 
 
 @dataclass

@@ -36,9 +36,9 @@ Existing pieces: `score_seams_by_overlap`, `find_best_split_seam_in_patch`, `unf
 
 **Adopt — elevated priority within Phase 3.**
 
-Users perceive printed output quality mostly through color and surface detail, not seam algorithm internals. `colorMode` (line art vs color) exists in settings but full **texture baking** (UV → printable faces) is not implemented.
+**Spike complete** — see `docs/spike-texture-baking.md`. When `colorMode=color`, the pipeline bakes vertex colors / GLB textures onto unfold triangles and renders SVG polygon fills. PDF and Studio preview remain line-art only for now.
 
-**Suggested order in Phase 3:**
+**Remaining for full Phase 3:**
 
 1. Texture baking from source mesh / AI materials → piece SVG fills
 2. Paper stock presets (kraft, white, colored cardstock)

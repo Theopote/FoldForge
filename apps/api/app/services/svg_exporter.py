@@ -5,7 +5,7 @@ from pathlib import Path
 import svgwrite
 
 from app.models.geometry import LayoutPage, PlacedPiece
-from app.schemas.model import ProjectSettings
+from app.schemas.model import ColorMode, ProjectSettings
 from app.services.export_annotations import draw_svg_page_annotations
 
 
@@ -97,6 +97,22 @@ def _draw_piece(
 ) -> None:
     piece = placed.piece
     piece_group = drawing.g(id=piece.id)
+
+    if settings.color_mode == ColorMode.COLOR and piece.baked_triangles:
+        for triangle in piece.baked_triangles:
+            points = [
+                (triangle.a.x, _svg_y(page_height_mm, y_offset, triangle.a.y)),
+                (triangle.b.x, _svg_y(page_height_mm, y_offset, triangle.b.y)),
+                (triangle.c.x, _svg_y(page_height_mm, y_offset, triangle.c.y)),
+            ]
+            piece_group.add(
+                drawing.polygon(
+                    points=points,
+                    fill=triangle.fill,
+                    stroke="none",
+                    fill_opacity=0.92,
+                )
+            )
 
     if settings.add_cut_lines:
         if piece.cut_outline and len(piece.cut_outline) >= 3:
