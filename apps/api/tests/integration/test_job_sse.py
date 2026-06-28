@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import json
 
+from datetime import datetime, timezone
+
 import pytest
 
 from app.schemas.job import JobStatus
+from app.schemas.model import ProjectSettings, ProjectStatus, SourceType
 from app.schemas.process_job import ProcessJob
 from app.services.process_job_store import process_job_store
-from datetime import datetime, timezone
 
 
 def _minimal_process_job(job_id: str = "ssejob001", project_id: str = "proj001") -> ProcessJob:
@@ -61,7 +63,6 @@ async def test_process_job_sse_stream_delivers_updates(
 ) -> None:
     from app.services.project_store import project_store
 
-    now = datetime.now(timezone.utc)
     project_store.create(
         project_id="proj001",
         name="SSE",
@@ -74,7 +75,6 @@ async def test_process_job_sse_stream_delivers_updates(
     process_job_store.create(job)
 
     events: list[dict] = []
-    done = asyncio.Event()
 
     async def read_stream() -> None:
         async with api_client.stream("GET", f"/api/process-jobs/{job.id}/events") as response:
@@ -85,18 +85,17 @@ async def test_process_job_sse_stream_delivers_updates(
                 payload = json.loads(line.removeprefix("data: "))
                 events.append(payload)
                 if payload.get("status") == "completed":
-                    done.set()
                     break
 
     async def push_updates() -> None:
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.35)
         process_job_store.update(
             job.id,
             status=JobStatus.RUNNING,
             progress=40,
             message="Unfolding",
         )
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.25)
         process_job_store.update(
             job.id,
             status=JobStatus.COMPLETED,

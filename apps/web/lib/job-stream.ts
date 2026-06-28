@@ -3,15 +3,15 @@
 import { withEventStreamAuth } from "@/lib/event-stream-auth";
 import { isAbortError, throwIfAborted } from "@/lib/poll-utils";
 
-export type StreamOptions = {
+export type StreamOptions<T> = {
   timeoutMs?: number;
   signal?: AbortSignal;
-  onMessage?: (payload: Record<string, unknown>) => void;
+  onMessage?: (payload: T) => void;
 };
 
 export function streamJobEvents<T extends Record<string, unknown>>(
   path: string,
-  options: StreamOptions & {
+  options: StreamOptions<T> & {
     isTerminal: (payload: T) => boolean;
     isFailure: (payload: T) => Error | null;
   },

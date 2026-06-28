@@ -26,7 +26,7 @@ Priority order (updated — see also `docs/future-features.md`):
 
 1. **Texture / color baking** — highest visual impact; extend existing `colorMode` into baked piece fills
 2. Interactive **SVG seam editor** (drag seams → incremental re-unfold)
-3. **SSE job progress** — replace polling for lower latency
+3. ~~**SSE job progress**~~ — prototype: `/api/jobs/{id}/events`, EventSource + poll fallback
 4. Assembly instruction generator
 5. Paper thickness compensation
 6. Community templates & sharing

@@ -80,7 +80,10 @@ async def api_client(
     import app.routers.process as process_router
     from app.main import app
     from app.services.ai.generation_queue import GenerationQueue
+    from app.services.job_events import job_event_hub
     from app.services.process_queue import ProcessQueue
+
+    job_event_hub.set_event_loop(asyncio.get_running_loop())
 
     process_q = ProcessQueue()
     generation_q = GenerationQueue()
