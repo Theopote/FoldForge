@@ -1,6 +1,7 @@
 /** Poll async AI generation jobs until complete or failed. */
 
 import { apiAuthHeaders } from "@/lib/api-auth";
+import { streamJobEvents, withStreamOrFallback } from "@/lib/job-stream";
 import { abortableDelay, throwIfAborted } from "@/lib/poll-utils";
 
 export type GenerationJobResponse = {
@@ -22,15 +23,38 @@ export type PollOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
   onProgress?: (job: GenerationJobResponse) => void;
+  preferPoll?: boolean;
 };
 
 const DEFAULT_INTERVAL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 600_000;
 
-/**
- * Poll a generation job until it completes or fails.
- */
-export async function pollGenerationJob(
+function generationJobFailure(job: GenerationJobResponse): Error | null {
+  if (job.status === "failed") {
+    return new Error(job.error ?? "AI generation failed.");
+  }
+  return null;
+}
+
+function streamGenerationJob(
+  jobId: string,
+  options: PollOptions = {},
+): Promise<GenerationJobResponse> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, onProgress } = options;
+
+  return streamJobEvents<GenerationJobResponse>(
+    `/api/generation-jobs/${jobId}/events`,
+    {
+      timeoutMs,
+      signal,
+      onMessage: onProgress,
+      isTerminal: (job) => job.status === "completed",
+      isFailure: generationJobFailure,
+    },
+  );
+}
+
+async function pollGenerationJobHttp(
   jobId: string,
   options: PollOptions = {},
 ): Promise<GenerationJobResponse> {
@@ -55,15 +79,30 @@ export async function pollGenerationJob(
     throwIfAborted(signal);
     options.onProgress?.(job);
 
-    if (job.status === "completed") {
-      return job;
-    }
-    if (job.status === "failed") {
-      throw new Error(job.error ?? "AI generation failed.");
-    }
+    const failure = generationJobFailure(job);
+    if (failure) throw failure;
+    if (job.status === "completed") return job;
 
     await abortableDelay(intervalMs, signal);
   }
 
   throw new Error("Generation timed out. Please try again later.");
+}
+
+/**
+ * Wait for a generation job via SSE, falling back to HTTP polling.
+ */
+export async function pollGenerationJob(
+  jobId: string,
+  options: PollOptions = {},
+): Promise<GenerationJobResponse> {
+  if (options.preferPoll) {
+    return pollGenerationJobHttp(jobId, options);
+  }
+
+  return withStreamOrFallback(
+    () => streamGenerationJob(jobId, options),
+    () => pollGenerationJobHttp(jobId, options),
+    options.signal,
+  );
 }

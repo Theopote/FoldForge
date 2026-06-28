@@ -390,6 +390,9 @@ class ProcessJobStore:
                 job.updated_at.isoformat(),
             ),
         )
+        from app.services.job_events import notify_process_job
+
+        notify_process_job(job)
 
 
 def _utc_now_iso() -> str:

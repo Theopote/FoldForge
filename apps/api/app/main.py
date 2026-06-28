@@ -1,5 +1,6 @@
 """FoldForge FastAPI application entry point."""
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,8 +9,9 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.middleware.api_auth import APIKeyMiddleware
-from app.routers import export, generate, health, jobs, process, upload
+from app.routers import export, generate, health, job_streams, jobs, process, upload
 from app.services.ai.generation_queue import generation_queue
+from app.services.job_events import job_event_hub
 from app.services.process_queue import process_queue
 from app.services.storage_cleanup import storage_cleanup_task
 
@@ -17,6 +19,7 @@ from app.services.storage_cleanup import storage_cleanup_task
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background workers on startup."""
+    job_event_hub.set_event_loop(asyncio.get_running_loop())
     await generation_queue.recover_pending_jobs()
     await process_queue.recover_pending_jobs()
     await generation_queue.start()
@@ -55,6 +58,7 @@ app.include_router(health.router)
 app.include_router(upload.router, prefix="/api", tags=["upload"])
 app.include_router(generate.router, prefix="/api", tags=["generate"])
 app.include_router(jobs.router, prefix="/api", tags=["jobs"])
+app.include_router(job_streams.router, prefix="/api", tags=["jobs"])
 app.include_router(process.router, prefix="/api", tags=["process"])
 app.include_router(export.router, prefix="/api", tags=["export"])
 

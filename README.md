@@ -165,6 +165,8 @@ Aborting the frontend poll (`AbortSignal`) stops status updates locally; use **C
 | GET | `/api/ai/providers` | List AI providers |
 | POST | `/api/process-model` | Queue papercraft job → returns `jobId` (202) |
 | GET | `/api/process-jobs/{jobId}` | Poll process job status / result |
+| GET | `/api/process-jobs/{jobId}/events` | **SSE** process job progress (prototype) |
+| GET | `/api/jobs/{jobId}/events` | **SSE** any async job (unified) |
 | POST | `/api/process-jobs/{jobId}/cancel` | Cancel queued job or request stop for running job |
 | GET | `/api/projects/:id` | Get project |
 | PATCH | `/api/projects/:id/settings` | Save papercraft settings (Studio sync) |

@@ -1,0 +1,14 @@
+**/.git
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.next
+**/node_modules
+**/.idea
+apps/api/.env
+apps/web/.env.local
+storage/**/*.db
+storage/uploads/*
+storage/processed/*
+storage/exports/*
+!storage/**/.gitkeep

@@ -129,6 +129,9 @@ class GenerationJobStore:
                     job.updated_at.isoformat(),
                 ),
             )
+        from app.services.job_events import notify_generation_job
+
+        notify_generation_job(job)
 
 
 _INCOMPLETE_STATUSES = (JobStatus.QUEUED.value, JobStatus.RUNNING.value)

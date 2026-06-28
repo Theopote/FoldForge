@@ -1,0 +1,50 @@
+# FoldForge — local / single-host deployment
+#
+# Usage:
+#   docker compose up --build
+#   open http://localhost:3000
+#
+# Data (SQLite + uploads/exports) persists in the foldforge-storage volume.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - foldforge-storage:/app/storage
+    environment:
+      DEBUG: "false"
+      FOLDFORGE_REQUIRE_API_AUTH: ${FOLDFORGE_REQUIRE_API_AUTH:-false}
+      FOLDFORGE_API_KEY: ${FOLDFORGE_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      MESHY_API_KEY: ${MESHY_API_KEY:-}
+      REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://api:8000
+        NEXT_PUBLIC_FOLDFORGE_API_KEY: ${FOLDFORGE_API_KEY:-}
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://api:8000
+      NEXT_PUBLIC_FOLDFORGE_API_KEY: ${FOLDFORGE_API_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  foldforge-storage:
+    driver: local

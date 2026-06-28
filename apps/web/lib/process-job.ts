@@ -3,6 +3,7 @@
 import type { CraftabilityScore, ProcessStats, ProjectStatus } from "@/types";
 
 import { apiAuthHeaders } from "@/lib/api-auth";
+import { streamJobEvents, withStreamOrFallback } from "@/lib/job-stream";
 import { abortableDelay, throwIfAborted } from "@/lib/poll-utils";
 import { ProcessJobCancelledError } from "@/lib/process-errors";
 
@@ -30,12 +31,42 @@ export type PollOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
   onProgress?: (job: ProcessJobResponse) => void;
+  /** Force HTTP polling (skip SSE). */
+  preferPoll?: boolean;
 };
 
 const DEFAULT_INTERVAL_MS = 1500;
 const DEFAULT_TIMEOUT_MS = 900_000;
 
-export async function pollProcessJob(
+function processJobFailure(job: ProcessJobResponse): Error | null {
+  if (job.status === "cancelled") {
+    return new ProcessJobCancelledError(job.error ?? "Processing cancelled.");
+  }
+  if (job.status === "failed") {
+    return new Error(job.error ?? "Papercraft processing failed.");
+  }
+  return null;
+}
+
+function streamProcessJob(
+  jobId: string,
+  options: PollOptions = {},
+): Promise<ProcessJobResponse> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, onProgress } = options;
+
+  return streamJobEvents<ProcessJobResponse>(
+    `/api/process-jobs/${jobId}/events`,
+    {
+      timeoutMs,
+      signal,
+      onMessage: onProgress,
+      isTerminal: (job) => job.status === "completed",
+      isFailure: processJobFailure,
+    },
+  );
+}
+
+async function pollProcessJobHttp(
   jobId: string,
   options: PollOptions = {},
 ): Promise<ProcessJobResponse> {
@@ -60,18 +91,27 @@ export async function pollProcessJob(
     throwIfAborted(signal);
     options.onProgress?.(job);
 
-    if (job.status === "completed") {
-      return job;
-    }
-    if (job.status === "cancelled") {
-      throw new ProcessJobCancelledError(job.error ?? "Processing cancelled.");
-    }
-    if (job.status === "failed") {
-      throw new Error(job.error ?? "Papercraft processing failed.");
-    }
+    const failure = processJobFailure(job);
+    if (failure) throw failure;
+    if (job.status === "completed") return job;
 
     await abortableDelay(intervalMs, signal);
   }
 
   throw new Error("Processing timed out. Please try again later.");
+}
+
+export async function pollProcessJob(
+  jobId: string,
+  options: PollOptions = {},
+): Promise<ProcessJobResponse> {
+  if (options.preferPoll) {
+    return pollProcessJobHttp(jobId, options);
+  }
+
+  return withStreamOrFallback(
+    () => streamProcessJob(jobId, options),
+    () => pollProcessJobHttp(jobId, options),
+    options.signal,
+  );
 }
