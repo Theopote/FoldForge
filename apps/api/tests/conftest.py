@@ -136,6 +136,16 @@ def run_pipeline_sync(test_env: Path):
     return _run
 
 
+@pytest.fixture
+def fast_layout(monkeypatch: pytest.MonkeyPatch):
+    """Replace NFP nesting with a deterministic row layout in pipeline tests."""
+    from tests.helpers.fast_layout import layout_pieces_row
+
+    monkeypatch.setattr("app.services.layout_engine.layout_pieces", layout_pieces_row)
+    monkeypatch.setattr("app.services.layout_repair.layout_pieces", layout_pieces_row)
+    yield
+
+
 async def wait_for_process_job(
     client,
     job_id: str,

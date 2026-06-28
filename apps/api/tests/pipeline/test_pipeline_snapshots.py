@@ -25,6 +25,7 @@ GOOD_FIXTURES = [
 @pytest.mark.parametrize("fixture_name", GOOD_FIXTURES)
 def test_pipeline_snapshot(
     run_pipeline_sync,
+    fast_layout,
     fixture_name: str,
     test_env: Path,
 ) -> None:
@@ -51,7 +52,7 @@ def test_pipeline_snapshot(
     assert_pipeline_snapshot(stem, metrics)
 
 
-def test_bad_mesh_does_not_crash_pipeline(run_pipeline_sync) -> None:
+def test_bad_mesh_does_not_crash_pipeline(run_pipeline_sync, fast_layout) -> None:
     """Non-manifold / open meshes should fail gracefully or complete with warnings."""
     try:
         result = run_pipeline_sync(

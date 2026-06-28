@@ -1,14 +1,14 @@
 {
-  "craftability_level": "good",
-  "craftability_score": 84,
+  "craftability_level": "fair",
+  "craftability_score": 59,
   "cut_lines": 24,
   "face_count": 12,
   "fold_lines": 6,
   "pages": 1,
-  "pdf_bytes": 2574,
+  "pdf_bytes": 1982,
   "piece_overlaps": 0,
   "pieces": 6,
-  "svg_bytes": 5772,
-  "tabs": 9,
-  "warning_count": 2
+  "svg_bytes": 5228,
+  "tabs": 0,
+  "warning_count": 3
 }

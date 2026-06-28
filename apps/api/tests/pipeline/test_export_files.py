@@ -11,7 +11,7 @@ from app.services.papercraft_pipeline import run_pipeline
 from tests.helpers.pipeline_assertions import assert_pdf_export, assert_svg_export
 
 
-def test_export_files_from_cube_pipeline(run_pipeline_sync, test_env: Path) -> None:
+def test_export_files_from_cube_pipeline(run_pipeline_sync, fast_layout, test_env: Path) -> None:
     result = run_pipeline_sync(
         "cube.stl",
         project_id="export_cube",
@@ -33,7 +33,7 @@ def test_export_files_from_cube_pipeline(run_pipeline_sync, test_env: Path) -> N
     assert result.craftability_score <= 100
 
 
-def test_pdf_page_size_matches_paper_setting(test_env: Path, fixtures_dir: Path) -> None:
+def test_pdf_page_size_matches_paper_setting(test_env: Path, fixtures_dir: Path, fast_layout) -> None:
     source = fixtures_dir / "cube.stl"
     settings_obj = ProjectSettings(
         paperSize=PaperSize.A4,
