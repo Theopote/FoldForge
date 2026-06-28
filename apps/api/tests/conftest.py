@@ -125,8 +125,10 @@ def run_pipeline_sync(test_env: Path):
                 difficulty=Difficulty.EASY,
                 style=Style.LOW_POLY,
                 targetHeightMm=80.0,
-                addTabs=True,
+                addTabs=False,
                 addNumbers=True,
+                addFoldLines=True,
+                addCutLines=True,
             ),
             source_original_path=source,
         )

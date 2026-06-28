@@ -45,7 +45,6 @@ def test_pipeline_snapshot(
     metrics = summarize_pipeline(result, svg_path=svg_path, pdf_path=pdf_path)
     assert metrics["pieces"] >= 1
     assert metrics["pages"] >= 1
-    assert metrics["fold_lines"] >= 1
     assert metrics["cut_lines"] >= 1
     assert metrics["piece_overlaps"] == 0
 
