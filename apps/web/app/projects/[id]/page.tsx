@@ -81,7 +81,7 @@ export default function ProjectDetailPage({
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <Button asChild variant="ghost" size="sm" className="mb-4">
-        <Link href="/studio">
+        <Link href={`/studio?project=${encodeURIComponent(project.id)}`}>
           <ArrowLeft className="mr-1 h-4 w-4" />
           Studio
         </Link>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { CraftabilityCard } from "@/features/craftability/craftability-card";
 import { ProcessingLogPanel } from "@/features/export-panel/processing-log-panel";
@@ -8,92 +9,108 @@ import { ModelPreviewPanel } from "@/features/model-preview/model-preview-panel"
 import { CreateSourcePanel } from "@/features/model-upload/create-source-panel";
 import { ProjectSettingsPanel } from "@/features/project-settings/project-settings-panel";
 import { UnfoldPreviewPanel } from "@/features/unfold-preview/unfold-preview-panel";
-import { resumeGenerationIfNeeded } from "@/features/studio/resume-generation";
-import { resumeProcessIfNeeded } from "@/features/studio/resume-process";
-import { ProjectNotFoundError, getProject } from "@/lib/api";
 import { cancelAllJobPolls } from "@/lib/job-poll-session";
 import {
-  clearStudioProject,
-  loadStudioProject,
-  projectDetailToSavedStudio,
-  saveStudioProject,
+  STUDIO_SESSION_STORAGE_KEY,
+  clearLastProjectId,
+  loadLastProjectId,
+  resolveStudioProjectId,
 } from "@/lib/project-storage";
+import { hydrateStudioProject } from "@/lib/studio-hydration";
 import { useStudioStore } from "@/store/studio-store";
 
 export function StudioWorkspace() {
-  const { projectId, status, craftability, restoreProject, addLog } =
-    useStudioStore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlProjectId = searchParams.get("project");
 
-  useEffect(() => {
-    if (projectId) return;
+  const { projectId, status, craftability, addLog } = useStudioStore();
+  const hydratingRef = useRef<string | null>(null);
+  const prevUrlProjectIdRef = useRef<string | null>(urlProjectId);
 
-    const saved = loadStudioProject();
-    if (!saved?.projectId) return;
+  const runHydration = (targetId: string, logLabel: string) => {
+    if (hydratingRef.current === targetId) return;
 
+    hydratingRef.current = targetId;
     let cancelled = false;
 
     void (async () => {
-      try {
-        const remote = await getProject(saved.projectId);
-        if (cancelled) return;
+      const result = await hydrateStudioProject(targetId);
+      if (cancelled) return;
 
-        const payload = projectDetailToSavedStudio(remote, {
-          sourceFileName: saved.sourceFileName,
-          activeJobId: saved.activeJobId,
-          activeProcessJobId: saved.activeProcessJobId,
-        });
-        restoreProject({ ...payload, savedAt: saved.savedAt });
-        saveStudioProject(payload);
-        addLog(`Restored project: ${remote.name}`);
+      hydratingRef.current = null;
 
-        const hasSource = Boolean(payload.sourceFileUrl);
-        await resumeGenerationIfNeeded(
-          payload.projectId,
-          payload.status,
-          payload.activeJobId,
-          hasSource,
-        );
-        await resumeProcessIfNeeded(
-          payload.projectId,
-          payload.status,
-          payload.activeProcessJobId,
-          hasSource,
-        );
-      } catch (error) {
-        if (cancelled) return;
-
-        if (error instanceof ProjectNotFoundError) {
-          clearStudioProject();
-          addLog("Previous project no longer exists — starting fresh.");
-          return;
-        }
-
-        restoreProject(saved);
-        addLog(
-          `Restored from local cache (${saved.projectName}); server unavailable.`,
-        );
-
-        const hasSource = Boolean(saved.sourceFileUrl);
-        await resumeGenerationIfNeeded(
-          saved.projectId,
-          saved.status,
-          saved.activeJobId,
-          hasSource,
-        );
-        await resumeProcessIfNeeded(
-          saved.projectId,
-          saved.status,
-          saved.activeProcessJobId,
-          hasSource,
-        );
+      if (result === "ok") {
+        addLog(`${logLabel}: ${useStudioStore.getState().projectName}`);
+        return;
       }
+
+      if (result === "not_found") {
+        clearLastProjectId();
+        router.replace("/studio");
+        addLog("Previous project no longer exists — starting fresh.");
+        return;
+      }
+
+      addLog("Could not reach the server — open Studio again when the API is running.");
     })();
 
     return () => {
       cancelled = true;
       cancelAllJobPolls();
     };
-  }, [projectId, restoreProject, addLog]);
+  };
+
+  // Keep the URL in sync when the in-memory project changes (upload / AI create).
+  useEffect(() => {
+    if (!projectId || projectId === urlProjectId) return;
+    router.replace(`/studio?project=${encodeURIComponent(projectId)}`, {
+      scroll: false,
+    });
+  }, [projectId, urlProjectId, router]);
+
+  // Initial open: store empty → load from ?project= or last local id.
+  useEffect(() => {
+    if (projectId) return;
+
+    const targetId = resolveStudioProjectId(urlProjectId, loadLastProjectId());
+    if (!targetId) return;
+
+    return runHydration(targetId, "Restored project");
+  }, [projectId, urlProjectId, addLog, router]);
+
+  // Explicit navigation to /studio?project=other while another project is loaded.
+  useEffect(() => {
+    if (urlProjectId === prevUrlProjectIdRef.current) return;
+    prevUrlProjectIdRef.current = urlProjectId;
+
+    if (!urlProjectId || urlProjectId === projectId) return;
+
+    return runHydration(urlProjectId, "Opened project");
+  }, [urlProjectId, projectId, addLog, router]);
+
+  // Another tab switched the last project id.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== STUDIO_SESSION_STORAGE_KEY || !event.newValue) return;
+
+      try {
+        const parsed = JSON.parse(event.newValue) as { projectId?: unknown };
+        const nextId =
+          typeof parsed.projectId === "string" ? parsed.projectId : null;
+        if (!nextId || nextId === useStudioStore.getState().projectId) return;
+
+        router.replace(`/studio?project=${encodeURIComponent(nextId)}`, {
+          scroll: false,
+        });
+      } catch {
+        // Ignore malformed cross-tab payloads.
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [router]);
 
   return (
     <>

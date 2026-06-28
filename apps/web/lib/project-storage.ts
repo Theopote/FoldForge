@@ -9,12 +9,14 @@ import type {
 
 const STORAGE_KEY = "foldforge:last-project";
 
+export { STORAGE_KEY as STUDIO_SESSION_STORAGE_KEY };
+
 /**
- * Local cache of the last studio session. On reload, `StudioWorkspace` fetches
- * the project from the API first and only falls back to this when offline.
+ * Studio session pointer — only the project id is cached locally.
+ * Project metadata and job state come from the backend (SQLite).
  */
 
-export type SavedStudioProject = {
+export type StudioProjectSnapshot = {
   projectId: string;
   projectName: string;
   sourceType: SourceType;
@@ -34,63 +36,12 @@ export type SavedStudioProject = {
   settings: ProjectSettings;
   stats: ProcessStats | null;
   craftability: CraftabilityScore | null;
-  savedAt: string;
 };
 
-export type StudioProjectSnapshot = Omit<SavedStudioProject, "savedAt">;
-
-export function studioStateToSavedProject(state: {
-  projectId: string | null;
-  projectName: string;
-  sourceType: SourceType;
-  sourceFileName: string | null;
-  sourceFileUrl: string | null;
-  sourcePrompt: string | null;
-  sourceImageUrl: string | null;
-  aiProvider: string | null;
-  enhancedPrompt: string | null;
-  activeJobId: string | null;
-  activeProcessJobId: string | null;
-  processedModelUrl: string | null;
-  unfoldSvgUrl: string | null;
-  unfoldPdfUrl: string | null;
-  unfoldZipUrl: string | null;
-  status: ProjectStatus;
-  settings: ProjectSettings;
-  stats: ProcessStats | null;
-  craftability: CraftabilityScore | null;
-}): StudioProjectSnapshot | null {
-  if (!state.projectId) return null;
-
-  return {
-    projectId: state.projectId,
-    projectName: state.projectName,
-    sourceType: state.sourceType,
-    sourceFileName: state.sourceFileName,
-    sourceFileUrl: state.sourceFileUrl,
-    sourcePrompt: state.sourcePrompt,
-    sourceImageUrl: state.sourceImageUrl,
-    aiProvider: state.aiProvider,
-    enhancedPrompt: state.enhancedPrompt,
-    activeJobId: state.activeJobId,
-    activeProcessJobId: state.activeProcessJobId,
-    processedModelUrl: state.processedModelUrl,
-    unfoldSvgUrl: state.unfoldSvgUrl,
-    unfoldPdfUrl: state.unfoldPdfUrl,
-    unfoldZipUrl: state.unfoldZipUrl,
-    status: state.status,
-    settings: state.settings,
-    stats: state.stats,
-    craftability: state.craftability,
-  };
-}
-
-export function persistStudioProject(
-  snapshot: StudioProjectSnapshot | null,
-): void {
-  if (!snapshot) return;
-  saveStudioProject(snapshot);
-}
+type LastStudioSession = {
+  projectId: string;
+  savedAt: string;
+};
 
 function fileNameFromUrl(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -105,30 +56,22 @@ function fileNameFromUrl(url: string | null | undefined): string | null {
   }
 }
 
-/** Map backend project payload into studio localStorage shape. */
-export function projectDetailToSavedStudio(
+/** Map backend project payload into studio store shape. */
+export function projectDetailToStudioSnapshot(
   project: ProjectDetailResponse,
-  fallback?: Pick<SavedStudioProject, "sourceFileName" | "activeJobId" | "activeProcessJobId">,
 ): StudioProjectSnapshot {
   return {
     projectId: project.id,
     projectName: project.name,
     sourceType: project.sourceType,
-    sourceFileName:
-      fallback?.sourceFileName ?? fileNameFromUrl(project.sourceFileUrl ?? null),
+    sourceFileName: fileNameFromUrl(project.sourceFileUrl ?? null),
     sourceFileUrl: project.sourceFileUrl ?? null,
     sourcePrompt: project.sourcePrompt ?? null,
     sourceImageUrl: project.sourceImageUrl ?? null,
     aiProvider: project.aiProvider ?? null,
     enhancedPrompt: project.enhancedPrompt ?? null,
-    activeJobId:
-      project.status === "processing" && !project.sourceFileUrl
-        ? (fallback?.activeJobId ?? null)
-        : null,
-    activeProcessJobId:
-      project.status === "processing" && project.sourceFileUrl
-        ? (fallback?.activeProcessJobId ?? null)
-        : null,
+    activeJobId: null,
+    activeProcessJobId: null,
     processedModelUrl: project.processedModelUrl ?? null,
     unfoldSvgUrl: project.unfoldSvgUrl ?? null,
     unfoldPdfUrl: project.unfoldPdfUrl ?? null,
@@ -140,34 +83,48 @@ export function projectDetailToSavedStudio(
   };
 }
 
-export function saveStudioProject(data: StudioProjectSnapshot): void {
-  if (typeof window === "undefined") return;
+/** Remember which project the user last opened in Studio. */
+export function persistLastProjectId(projectId: string): void {
+  if (typeof window === "undefined" || !projectId) return;
 
-  const payload: SavedStudioProject = {
-    ...data,
+  const payload: LastStudioSession = {
+    projectId,
     savedAt: new Date().toISOString(),
   };
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
-    // Quota exceeded or private mode — ignore silently for MVP
+    // Quota exceeded or private mode — ignore silently
   }
 }
 
-export function loadStudioProject(): SavedStudioProject | null {
+/** Read the last studio project id (supports legacy full-state cache). */
+export function loadLastProjectId(): string | null {
   if (typeof window === "undefined") return null;
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as SavedStudioProject;
+
+    const parsed = JSON.parse(raw) as { projectId?: unknown };
+    return typeof parsed.projectId === "string" && parsed.projectId
+      ? parsed.projectId
+      : null;
   } catch {
     return null;
   }
 }
 
-export function clearStudioProject(): void {
+export function clearLastProjectId(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
+}
+
+export function resolveStudioProjectId(
+  urlProjectId: string | null,
+  storedProjectId: string | null,
+): string | null {
+  if (urlProjectId) return urlProjectId;
+  return storedProjectId;
 }

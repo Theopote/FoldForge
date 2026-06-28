@@ -96,7 +96,7 @@ Open:
 
 Exports: **PDF** (with 50 mm scale check + legend), **SVG**, **ZIP** (includes `README.txt` and `instructions.txt`).
 
-Projects and async jobs are persisted in **SQLite** (`storage/foldforge.db`) so a backend restart does not lose project metadata.
+Projects and async jobs are persisted in **SQLite** (`storage/foldforge.db`) so a backend restart does not lose project metadata. The Studio UI loads project state from the API on open; the browser only remembers the last project id (`localStorage` + optional `/studio?project=` URL).
 
 ## Papercraft layout policy
 
@@ -205,7 +205,8 @@ UPDATE_SNAPSHOTS=1 python -m pytest tests/pipeline/test_pipeline_snapshots.py
 | Cancel clicked but UI stuck on processing | Job finished at the same time as cancel | Reload project or open process job — terminal jobs return current state; completed jobs show results |
 | Cancel does not stop instantly | Heavy stage already running | Cancel is checked between pipeline steps and inside unfold/layout loops; wait a few seconds |
 | Piece scaled / misaligned tabs | Old build or manual edit | Current FoldForge does not per-piece scale; regenerate after changing paper or height |
-| Project 404 after restart | Old localStorage ID | Reload from `/projects/{id}` only if backend DB still has it |
+| Project 404 after restart | Stale project id in URL or localStorage | Open `/studio` for a fresh session, or `/studio?project={id}` when the backend DB still has that project |
+| Studio out of sync across tabs | Another tab switched projects | Reload Studio — project state is loaded from the API; tabs share only the last project id |
 | Empty PDF / SVG | Process job failed | Open job error message; try a simpler mesh (e.g. `cube.stl`) |
 | Text/Image → 3D fails | No AI provider configured | Set `AI_PROVIDER=mock` for demo or configure Meshy/Replicate keys |
 

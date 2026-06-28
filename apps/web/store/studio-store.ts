@@ -2,11 +2,8 @@ import { create } from "zustand";
 
 import type { ModelMeshStats } from "@/lib/geometry-stats";
 import { cancelAllJobPolls } from "@/lib/job-poll-session";
-import type { SavedStudioProject } from "@/lib/project-storage";
-import {
-  persistStudioProject,
-  studioStateToSavedProject,
-} from "@/lib/project-storage";
+import type { StudioProjectSnapshot } from "@/lib/project-storage";
+import { persistLastProjectId } from "@/lib/project-storage";
 import {
   DEFAULT_PROJECT_SETTINGS,
   type CraftabilityScore,
@@ -94,7 +91,7 @@ type StudioState = {
     craftability: CraftabilityScore | null;
     status: ProjectStatus;
   }) => void;
-  restoreProject: (saved: SavedStudioProject) => void;
+  restoreProject: (saved: StudioProjectSnapshot) => void;
   addLog: (message: string) => void;
   setError: (message: string | null) => void;
   setJobProgress: (payload: {
@@ -147,33 +144,17 @@ function applyGenerationReset() {
   };
 }
 
-function persistState(state: StudioState): void {
-  persistStudioProject(studioStateToSavedProject(state));
+function touchProjectSession(projectId: string): void {
+  persistLastProjectId(projectId);
 }
 
 export const useStudioStore = create<StudioState>((set) => ({
   ...initialState,
   setSourceType: (sourceType) => set({ sourceType }),
   setUploadResult: ({ projectId, sourceFileUrl, fileName }) =>
-    set((state) => {
+    set(() => {
       cancelAllJobPolls();
-      const next: StudioState = {
-        ...state,
-        projectId,
-        sourceFileUrl,
-        sourceFileName: fileName,
-        projectName: fileName.replace(/\.[^.]+$/, ""),
-        sourceType: "upload_3d",
-        sourcePrompt: null,
-        sourceImageUrl: null,
-        aiProvider: null,
-        enhancedPrompt: null,
-        activeJobId: null,
-        activeProcessJobId: null,
-        status: "uploaded",
-        ...applyGenerationReset(),
-      };
-      persistState(next);
+      touchProjectSession(projectId);
       return {
         projectId,
         sourceFileUrl,
@@ -191,25 +172,9 @@ export const useStudioStore = create<StudioState>((set) => ({
       };
     }),
   setGenerationResult: (payload) =>
-    set((state) => {
+    set(() => {
       cancelAllJobPolls();
-      const next: StudioState = {
-        ...state,
-        projectId: payload.projectId,
-        sourceFileUrl: payload.sourceFileUrl,
-        sourceFileName: payload.fileName,
-        projectName: payload.fileName.replace(/\.[^.]+$/, ""),
-        sourceType: payload.sourceType,
-        sourcePrompt: payload.sourcePrompt ?? null,
-        sourceImageUrl: payload.sourceImageUrl ?? null,
-        aiProvider: payload.aiProvider ?? null,
-        enhancedPrompt: payload.enhancedPrompt ?? null,
-        activeJobId: null,
-        activeProcessJobId: null,
-        status: "uploaded",
-        ...applyGenerationReset(),
-      };
-      persistState(next);
+      touchProjectSession(payload.projectId);
       return {
         projectId: payload.projectId,
         sourceFileUrl: payload.sourceFileUrl,
@@ -227,25 +192,9 @@ export const useStudioStore = create<StudioState>((set) => ({
       };
     }),
   setAsyncGenerationPending: (payload) =>
-    set((state) => {
+    set(() => {
       cancelAllJobPolls();
-      const next: StudioState = {
-        ...state,
-        projectId: payload.projectId,
-        projectName: payload.projectName,
-        sourceType: payload.sourceType,
-        sourcePrompt: payload.sourcePrompt ?? null,
-        sourceImageUrl: payload.sourceImageUrl ?? null,
-        aiProvider: payload.aiProvider ?? null,
-        enhancedPrompt: null,
-        activeJobId: payload.jobId,
-        activeProcessJobId: null,
-        sourceFileUrl: null,
-        sourceFileName: null,
-        status: "processing",
-        ...applyGenerationReset(),
-      };
-      persistState(next);
+      touchProjectSession(payload.projectId);
       return {
         projectId: payload.projectId,
         projectName: payload.projectName,
@@ -262,75 +211,27 @@ export const useStudioStore = create<StudioState>((set) => ({
         ...applyGenerationReset(),
       };
     }),
-  setActiveJobId: (activeJobId) =>
-    set((state) => {
-      const next: StudioState = { ...state, activeJobId };
-      persistState(next);
-      return { activeJobId };
-    }),
-  setActiveProcessJobId: (activeProcessJobId) =>
-    set((state) => {
-      const next: StudioState = { ...state, activeProcessJobId };
-      persistState(next);
-      return { activeProcessJobId };
-    }),
-  setStatus: (status) =>
-    set((state) => {
-      const next: StudioState = { ...state, status };
-      persistState(next);
-      return { status };
-    }),
+  setActiveJobId: (activeJobId) => set({ activeJobId }),
+  setActiveProcessJobId: (activeProcessJobId) => set({ activeProcessJobId }),
+  setStatus: (status) => set({ status }),
   updateSettings: (partial) =>
-    set((state) => {
-      const settings = { ...state.settings, ...partial };
-      const next: StudioState = { ...state, settings };
-      persistState(next);
-      return { settings };
-    }),
+    set((state) => ({ settings: { ...state.settings, ...partial } })),
   setMeshStats: (meshStats) => set({ meshStats }),
-  setResults: (payload) =>
-    set((state) => {
-      const next: StudioState = { ...state, ...payload };
-      persistState(next);
-      return payload;
-    }),
+  setResults: (payload) => set(payload),
   beginPapercraftProcessing: () =>
-    set((state) => {
-      const next: StudioState = {
-        ...state,
-        status: "processing",
-        activeProcessJobId: null,
-        processedModelUrl: null,
-        unfoldSvgUrl: null,
-        unfoldPdfUrl: null,
-        unfoldZipUrl: null,
-        stats: null,
-        craftability: null,
-        error: null,
-      };
-      persistState(next);
-      return {
-        status: "processing" as ProjectStatus,
-        activeProcessJobId: null,
-        processedModelUrl: null,
-        unfoldSvgUrl: null,
-        unfoldPdfUrl: null,
-        unfoldZipUrl: null,
-        stats: null,
-        craftability: null,
-        error: null,
-      };
+    set({
+      status: "processing" as ProjectStatus,
+      activeProcessJobId: null,
+      processedModelUrl: null,
+      unfoldSvgUrl: null,
+      unfoldPdfUrl: null,
+      unfoldZipUrl: null,
+      stats: null,
+      craftability: null,
+      error: null,
     }),
   completePapercraftProcessing: (payload) =>
-    set((state) => {
-      const next: StudioState = {
-        ...state,
-        ...payload,
-        activeProcessJobId: null,
-      };
-      persistState(next);
-      return { ...payload, activeProcessJobId: null };
-    }),
+    set({ ...payload, activeProcessJobId: null }),
   restoreProject: (saved) =>
     set({
       projectId: saved.projectId,

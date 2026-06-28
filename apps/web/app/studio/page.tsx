@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { StudioWorkspace } from "@/features/studio/studio-workspace";
 import { Badge } from "@/components/ui/badge";
 
@@ -15,7 +17,9 @@ export default function StudioPage() {
         <Badge variant="secondary">Phase 2 · AI Input</Badge>
       </div>
 
-      <StudioWorkspace />
+      <Suspense fallback={null}>
+        <StudioWorkspace />
+      </Suspense>
     </div>
   );
 }
