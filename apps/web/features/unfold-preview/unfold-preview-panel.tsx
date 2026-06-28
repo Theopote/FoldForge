@@ -1,12 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { Download, FileImage, FileText, Loader2, Package, Palette } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { withStorageAuth } from "@/lib/api-auth";
-import { unfoldPreviewUrl } from "@/lib/unfold-preview-url";
+import {
+  UnfoldSvgPreview,
+  type UnfoldPreviewLayer,
+} from "@/features/unfold-preview/unfold-svg-preview";
 import { useStudioStore } from "@/store/studio-store";
 
 export function UnfoldPreviewPanel() {
@@ -19,6 +23,7 @@ export function UnfoldPreviewPanel() {
     exportRevision,
     exportedColorMode,
   } = useStudioStore();
+  const [previewLayer, setPreviewLayer] = useState<UnfoldPreviewLayer>("both");
   const isProcessing = status === "processing";
   const previewIsColor = exportedColorMode === "color";
   const previewIsStale =
@@ -39,6 +44,25 @@ export function UnfoldPreviewPanel() {
             </Badge>
           )}
         </div>
+        {previewIsColor && unfoldSvgUrl && !isProcessing && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            <LayerToggle
+              label="Both"
+              active={previewLayer === "both"}
+              onClick={() => setPreviewLayer("both")}
+            />
+            <LayerToggle
+              label="Baked"
+              active={previewLayer === "color"}
+              onClick={() => setPreviewLayer("color")}
+            />
+            <LayerToggle
+              label="Lines"
+              active={previewLayer === "lines"}
+              onClick={() => setPreviewLayer("lines")}
+            />
+          </div>
+        )}
         {previewIsStale && (
           <p className="text-xs text-amber-700">
             Color mode changed — regenerate the template to refresh the preview.
@@ -66,12 +90,21 @@ export function UnfoldPreviewPanel() {
           )}
 
           {!isProcessing && unfoldSvgUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={unfoldPreviewUrl(unfoldSvgUrl, exportRevision)}
-              alt="Unfold preview"
-              className="max-h-full max-w-full object-contain p-4"
-            />
+            previewIsColor ? (
+              <UnfoldSvgPreview
+                url={unfoldSvgUrl}
+                revision={exportRevision}
+                layer={previewLayer}
+                className="p-4"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={withStorageAuth(`${unfoldSvgUrl}?v=${exportRevision}`)}
+                alt="Unfold preview"
+                className="max-h-full max-w-full object-contain p-4"
+              />
+            )
           ) : !isProcessing ? (
             <div className="px-6 text-center">
               <FileImage className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
@@ -96,6 +129,26 @@ export function UnfoldPreviewPanel() {
         />
       </CardContent>
     </Card>
+  );
+}
+
+function LayerToggle({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Badge
+      variant={active ? "default" : "outline"}
+      className="cursor-pointer font-normal"
+      onClick={onClick}
+    >
+      {label}
+    </Badge>
   );
 }
 

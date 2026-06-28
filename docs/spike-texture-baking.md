@@ -37,7 +37,9 @@ Implementation: `app/services/texture_baker.py`
 
 **Studio preview:** unfold panel renders the exported SVG (includes baked fills when `colorMode=color`), with storage auth, cache-bust revision, and stale-preview hint when settings change after export.
 
-**Material cache:** geometry + face colors persisted under `storage/cache/`; unchanged geometry settings skip unfold/tabs on regenerate (layout-only changes).
+**Material cache:** geometry + face colors + per-piece vertex maps persisted under `storage/cache/`; unchanged geometry settings skip unfold/tabs on regenerate. Bake reuses `UnfoldPiece.vertex_map` instead of recomputing LSCM/BFS per piece.
+
+**Studio preview:** color exports use inline SVG with `Both` / `Baked` / `Lines` layer toggles.
 
 ## Pipeline hook
 

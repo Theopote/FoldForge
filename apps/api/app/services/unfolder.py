@@ -333,6 +333,7 @@ def _build_piece_from_vertices(
         cut_lines=cut_lines,
         label=piece_label,
         has_overlap=has_overlap,
+        vertex_map=dict(vertex_2d),
     )
 
 
@@ -621,6 +622,10 @@ def translate_piece(piece: UnfoldPiece, dx: float, dy: float) -> UnfoldPiece:
             )
             for t in piece.baked_triangles
         ],
+        vertex_map={
+            vertex_idx: Point2D(point.x + dx, point.y + dy)
+            for vertex_idx, point in piece.vertex_map.items()
+        },
     )
 
 
@@ -673,6 +678,7 @@ def rotate_piece(piece: UnfoldPiece, quarter_turns: int) -> UnfoldPiece:
             BakedTriangle(a=rot(t.a), b=rot(t.b), c=rot(t.c), fill=t.fill)
             for t in piece.baked_triangles
         ],
+        vertex_map={vertex_idx: rot(point) for vertex_idx, point in piece.vertex_map.items()},
     )
 
 

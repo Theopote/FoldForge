@@ -20,6 +20,7 @@ class TextureBakeStats:
     used_vertex_colors: bool
     used_texture_map: bool
     used_face_color_cache: bool
+    used_vertex_map_cache: bool
     face_colors: dict[int, str]
 
 
@@ -42,13 +43,16 @@ def bake_piece_textures(
     pieces_with_color = 0
     triangle_count = 0
     used_face_color_cache = False
+    used_vertex_map_cache = False
     face_colors: dict[int, str] = dict(face_color_cache or {})
 
     for piece in pieces:
         if not piece.face_ids:
             continue
 
-        vertex_2d, _ = compute_unfold_vertex_map(mesh, piece.face_ids, dihedral)
+        vertex_2d, from_cache = resolve_piece_vertex_map(mesh, piece, dihedral)
+        if from_cache:
+            used_vertex_map_cache = True
         baked: list[BakedTriangle] = []
 
         for face_idx in piece.face_ids:
@@ -76,8 +80,33 @@ def bake_piece_textures(
         used_vertex_colors=bool(sampler and sampler.used_vertex_colors),
         used_texture_map=bool(sampler and sampler.used_texture_map),
         used_face_color_cache=used_face_color_cache,
+        used_vertex_map_cache=used_vertex_map_cache,
         face_colors=face_colors,
     )
+
+
+def resolve_piece_vertex_map(
+    mesh: trimesh.Trimesh,
+    piece: UnfoldPiece,
+    dihedral: EdgeDihedralData,
+) -> tuple[dict[int, Point2D], bool]:
+    """Return 2D vertex positions for a piece, reusing ``piece.vertex_map`` when valid."""
+    if _vertex_map_covers_piece(mesh, piece):
+        return piece.vertex_map, True
+
+    vertex_2d, _ = compute_unfold_vertex_map(mesh, piece.face_ids, dihedral)
+    piece.vertex_map = vertex_2d
+    return vertex_2d, False
+
+
+def _vertex_map_covers_piece(mesh: trimesh.Trimesh, piece: UnfoldPiece) -> bool:
+    if not piece.vertex_map:
+        return False
+    for face_idx in piece.face_ids:
+        for vertex_idx in mesh.faces[face_idx]:
+            if int(vertex_idx) not in piece.vertex_map:
+                return False
+    return True
 
 
 def _bake_face_triangle(

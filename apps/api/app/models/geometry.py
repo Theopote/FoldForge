@@ -60,6 +60,7 @@ class UnfoldPiece:
     has_overlap: bool = False
     cut_outline: list[Point2D] | None = None
     baked_triangles: list[BakedTriangle] = field(default_factory=list)
+    vertex_map: dict[int, Point2D] = field(default_factory=dict)
 
 
 @dataclass

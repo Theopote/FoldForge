@@ -97,6 +97,8 @@ def _draw_piece(
 ) -> None:
     piece = placed.piece
     piece_group = drawing.g(id=piece.id)
+    baked_layer = drawing.g(class_="layer-baked")
+    lines_layer = drawing.g(class_="layer-lines")
 
     if settings.color_mode == ColorMode.COLOR and piece.baked_triangles:
         for triangle in piece.baked_triangles:
@@ -105,7 +107,7 @@ def _draw_piece(
                 (triangle.b.x, _svg_y(page_height_mm, y_offset, triangle.b.y)),
                 (triangle.c.x, _svg_y(page_height_mm, y_offset, triangle.c.y)),
             ]
-            piece_group.add(
+            baked_layer.add(
                 drawing.polygon(
                     points=points,
                     fill=triangle.fill,
@@ -120,7 +122,7 @@ def _draw_piece(
                 (p.x, _svg_y(page_height_mm, y_offset, p.y))
                 for p in piece.cut_outline
             ]
-            piece_group.add(
+            lines_layer.add(
                 drawing.polygon(
                     points=points,
                     fill="none",
@@ -130,7 +132,7 @@ def _draw_piece(
             )
         else:
             for cut in piece.cut_lines:
-                piece_group.add(
+                lines_layer.add(
                     drawing.line(
                         start=(
                             cut.start.x,
@@ -149,7 +151,7 @@ def _draw_piece(
         for fold in piece.fold_lines:
             dash = "2,1.5" if fold.fold_type == "valley" else "4,1.5"
             color = "#2563eb" if fold.fold_type == "valley" else "#dc2626"
-            piece_group.add(
+            lines_layer.add(
                 drawing.line(
                     start=(
                         fold.start.x,
@@ -171,7 +173,7 @@ def _draw_piece(
                 (p.x, _svg_y(page_height_mm, y_offset, p.y))
                 for p in tab.polygon
             ]
-            piece_group.add(
+            lines_layer.add(
                 drawing.polygon(
                     points=points,
                     fill="#f1f5f9",
@@ -182,7 +184,7 @@ def _draw_piece(
             if settings.add_numbers and tab.label:
                 cx = sum(p[0] for p in points) / len(points)
                 cy = sum(p[1] for p in points) / len(points)
-                piece_group.add(
+                lines_layer.add(
                     drawing.text(
                         tab.label,
                         insert=(cx, cy),
@@ -206,7 +208,7 @@ def _draw_piece(
             else:
                 continue
             if settings.add_numbers:
-                piece_group.add(
+                lines_layer.add(
                     drawing.text(
                         tab.label,
                         insert=(cx, _svg_y(page_height_mm, y_offset, cy)),
@@ -220,7 +222,7 @@ def _draw_piece(
     if settings.add_numbers and piece.label:
         cx = sum(p.x for p in piece.polygon) / max(len(piece.polygon), 1)
         cy = sum(p.y for p in piece.polygon) / max(len(piece.polygon), 1)
-        piece_group.add(
+        lines_layer.add(
             drawing.text(
                 piece.label,
                 insert=(cx, _svg_y(page_height_mm, y_offset, cy)),
@@ -232,4 +234,6 @@ def _draw_piece(
             )
         )
 
+    piece_group.add(baked_layer)
+    piece_group.add(lines_layer)
     group.add(piece_group)

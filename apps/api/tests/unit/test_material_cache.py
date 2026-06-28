@@ -23,6 +23,7 @@ from app.services.papercraft_pipeline import run_pipeline
 from app.services.seam_generator import compute_edge_dihedral_angles
 from app.services.texture_baker import bake_piece_textures
 from app.services.unfold_repair import unfold_with_auto_repair
+from app.schemas.model import Difficulty
 
 
 def _colored_box() -> trimesh.Trimesh:
@@ -82,6 +83,35 @@ def test_material_cache_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     cache_hit, _ = try_restore_geometry_cache("project-1", source, settings_obj)
     assert cache_hit is not None
     assert cache_hit[0].face_ids == [0, 1]
+
+
+def test_material_cache_round_trip_preserves_vertex_map(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "cache_dir", tmp_path / "cache")
+    monkeypatch.setattr(settings, "material_cache_enabled", True)
+
+    mesh = _colored_box()
+    result = unfold_with_auto_repair(mesh, Difficulty.EASY, block_export_on_failure=False)
+    source = tmp_path / "source.stl"
+    mesh.export(source)
+
+    settings_obj = ProjectSettings(colorMode=ColorMode.COLOR, paperSize=PaperSize.A4)
+    save_material_cache(
+        "vertex-map-project",
+        source_path=source,
+        settings=settings_obj,
+        pieces=result.pieces,
+        face_colors={0: "#aabbcc"},
+    )
+
+    loaded = load_material_cache("vertex-map-project")
+    assert loaded is not None
+    restored = deserialize_pieces(loaded.pieces)
+    assert restored[0].vertex_map
 
 
 def test_face_color_cache_skips_mesh_sampling() -> None:

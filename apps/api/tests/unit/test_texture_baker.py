@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 import trimesh
 
 from app.models.geometry import BakedTriangle, LayoutPage, PlacedPiece, Point2D, UnfoldPiece
@@ -14,7 +15,7 @@ from app.services.pdf_exporter import export_pdf, _hex_to_rgb01
 from app.services.svg_exporter import export_svg
 from app.services.texture_baker import bake_piece_textures
 from app.services.unfold_repair import unfold_with_auto_repair
-from app.services.unfolder import translate_piece
+from app.services.unfolder import compute_unfold_vertex_map, translate_piece
 from app.schemas.model import Difficulty
 
 
@@ -85,6 +86,8 @@ def test_svg_color_mode_renders_baked_fills(tmp_path: Path) -> None:
     text = svg_path.read_text(encoding="utf-8")
     assert 'fill="#4caf50"' in text
     assert "fill_opacity" in text or "opacity" in text
+    assert "layer-baked" in text
+    assert "layer-lines" in text
 
 
 def test_pdf_color_mode_renders_baked_fills(tmp_path: Path) -> None:
@@ -138,6 +141,32 @@ def test_hex_to_rgb01_parses_baked_fill() -> None:
         175 / 255.0,
         80 / 255.0,
     )
+
+
+def test_bake_reuses_cached_vertex_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    mesh = _colored_box()
+    dihedral = compute_edge_dihedral_angles(mesh)
+    result = unfold_with_auto_repair(mesh, Difficulty.EASY, block_export_on_failure=False)
+
+    assert result.pieces
+    assert result.pieces[0].vertex_map
+
+    calls = {"count": 0}
+    original = compute_unfold_vertex_map
+
+    def counting(*args, **kwargs):
+        calls["count"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "app.services.texture_baker.compute_unfold_vertex_map",
+        counting,
+    )
+
+    _, stats = bake_piece_textures(mesh, result.pieces, dihedral)
+
+    assert calls["count"] == 0
+    assert stats.used_vertex_map_cache is True
 
 
 def test_translate_piece_moves_baked_triangles() -> None:

@@ -222,6 +222,10 @@ def serialize_piece(piece: UnfoldPiece) -> dict[str, Any]:
             }
             for triangle in piece.baked_triangles
         ],
+        "vertexMap": {
+            str(vertex_idx): _point_to_dict(point)
+            for vertex_idx, point in sorted(piece.vertex_map.items())
+        },
     }
 
 
@@ -278,6 +282,10 @@ def deserialize_piece(payload: dict[str, Any]) -> UnfoldPiece:
             )
             for triangle in payload.get("bakedTriangles", [])
         ],
+        vertex_map={
+            int(vertex_idx): _point_from_dict(point)
+            for vertex_idx, point in dict(payload.get("vertexMap", {})).items()
+        },
     )
 
 
