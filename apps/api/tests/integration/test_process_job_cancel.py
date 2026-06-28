@@ -124,12 +124,12 @@ async def test_cancel_running_process_job(
 
     def slow_run_pipeline(*_args, cancel_check=None, on_progress=None, **_kwargs):
         started.set()
-        if on_progress is not None:
-            on_progress(15, "Slow step")
-        for _ in range(120):
-            if cancel_check is not None and cancel_check():
+        for _ in range(300):
+            if on_progress is not None:
+                on_progress(15, "Slow step")
+            elif cancel_check is not None and cancel_check():
                 raise JobCancelledError("Processing cancelled.")
-            time.sleep(0.05)
+            time.sleep(0.02)
         raise RuntimeError("Pipeline should have been cancelled")
 
     monkeypatch.setattr(process_queue_module, "run_pipeline", slow_run_pipeline)
@@ -165,6 +165,15 @@ async def test_cancel_running_process_job(
     job_id = process.json()["jobId"]
 
     await asyncio.wait_for(started.wait(), timeout=15.0)
+
+    for _ in range(100):
+        poll = await api_client.get(f"/api/process-jobs/{job_id}")
+        poll.raise_for_status()
+        if poll.json()["status"] == JobStatus.RUNNING.value:
+            break
+        await asyncio.sleep(0.05)
+    else:
+        pytest.fail("Process job did not enter running state")
 
     cancel = await api_client.post(f"/api/process-jobs/{job_id}/cancel")
     assert cancel.status_code == 200

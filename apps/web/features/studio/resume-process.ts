@@ -1,5 +1,3 @@
-"""Apply papercraft process job outcomes to studio state."""
-
 import {
   ProcessJobNotFoundError,
   getProjectProcessJob,
