@@ -84,6 +84,16 @@ type StudioState = {
     stats?: ProcessStats | null;
     craftability?: CraftabilityScore | null;
   }) => void;
+  beginPapercraftProcessing: () => void;
+  completePapercraftProcessing: (payload: {
+    processedModelUrl: string | null;
+    unfoldSvgUrl: string | null;
+    unfoldPdfUrl: string | null;
+    unfoldZipUrl: string | null;
+    stats: ProcessStats | null;
+    craftability: CraftabilityScore | null;
+    status: ProjectStatus;
+  }) => void;
   restoreProject: (saved: SavedStudioProject) => void;
   addLog: (message: string) => void;
   setError: (message: string | null) => void;
@@ -283,6 +293,43 @@ export const useStudioStore = create<StudioState>((set) => ({
       const next: StudioState = { ...state, ...payload };
       persistState(next);
       return payload;
+    }),
+  beginPapercraftProcessing: () =>
+    set((state) => {
+      const next: StudioState = {
+        ...state,
+        status: "processing",
+        activeProcessJobId: null,
+        processedModelUrl: null,
+        unfoldSvgUrl: null,
+        unfoldPdfUrl: null,
+        unfoldZipUrl: null,
+        stats: null,
+        craftability: null,
+        error: null,
+      };
+      persistState(next);
+      return {
+        status: "processing" as ProjectStatus,
+        activeProcessJobId: null,
+        processedModelUrl: null,
+        unfoldSvgUrl: null,
+        unfoldPdfUrl: null,
+        unfoldZipUrl: null,
+        stats: null,
+        craftability: null,
+        error: null,
+      };
+    }),
+  completePapercraftProcessing: (payload) =>
+    set((state) => {
+      const next: StudioState = {
+        ...state,
+        ...payload,
+        activeProcessJobId: null,
+      };
+      persistState(next);
+      return { ...payload, activeProcessJobId: null };
     }),
   restoreProject: (saved) =>
     set({

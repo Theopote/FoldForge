@@ -32,8 +32,8 @@ export function ProjectSettingsPanel() {
     updateSettings,
     projectId,
     status,
-    setStatus,
-    setResults,
+    beginPapercraftProcessing,
+    completePapercraftProcessing,
     addLog,
     setError,
     setActiveProcessJobId,
@@ -48,7 +48,7 @@ export function ProjectSettingsPanel() {
     }
 
     setError(null);
-    setStatus("processing");
+    beginPapercraftProcessing();
     clearJobProgressTracking();
     reportJobProgress("papercraft_process", 0, "Queued");
     addLog("Starting papercraft generation...");
@@ -69,15 +69,15 @@ export function ProjectSettingsPanel() {
 
       setActiveProcessJobId(null);
       clearJobProgressTracking();
-      setResults({
-        processedModelUrl: data.processedModelUrl,
-        unfoldSvgUrl: data.unfoldSvgUrl,
-        unfoldPdfUrl: data.unfoldPdfUrl,
-        unfoldZipUrl: data.unfoldZipUrl,
-        stats: data.stats,
-        craftability: data.craftability as CraftabilityScore | undefined,
+      completePapercraftProcessing({
+        processedModelUrl: data.processedModelUrl ?? null,
+        unfoldSvgUrl: data.unfoldSvgUrl ?? null,
+        unfoldPdfUrl: data.unfoldPdfUrl ?? null,
+        unfoldZipUrl: data.unfoldZipUrl ?? null,
+        stats: data.stats ?? null,
+        craftability: (data.craftability as CraftabilityScore | undefined) ?? null,
+        status: data.status as typeof status,
       });
-      setStatus(data.status as typeof status);
 
       if (data.stats) {
         addLog(
@@ -98,7 +98,7 @@ export function ProjectSettingsPanel() {
       const message =
         error instanceof Error ? error.message : "Generation failed.";
       setError(message);
-      setStatus("failed");
+      useStudioStore.getState().setStatus("failed");
       setActiveProcessJobId(null);
       clearJobProgressTracking();
       addLog(`Error: ${message}`);

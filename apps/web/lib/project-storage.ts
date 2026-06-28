@@ -9,6 +9,11 @@ import type {
 
 const STORAGE_KEY = "foldforge:last-project";
 
+/**
+ * Local cache of the last studio session. On reload, `StudioWorkspace` fetches
+ * the project from the API first and only falls back to this when offline.
+ */
+
 export type SavedStudioProject = {
   projectId: string;
   projectName: string;

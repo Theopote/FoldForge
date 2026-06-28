@@ -14,19 +14,17 @@ import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore, ProjectStatus } from "@/types";
 
 function applyCompletedProcessJob(job: ProcessJobResponse): void {
-  const { setResults, setStatus, setActiveProcessJobId, addLog } =
-    useStudioStore.getState();
+  const { completePapercraftProcessing, addLog } = useStudioStore.getState();
 
-  setResults({
+  completePapercraftProcessing({
     processedModelUrl: job.processedModelUrl ?? null,
     unfoldSvgUrl: job.unfoldSvgUrl ?? null,
     unfoldPdfUrl: job.unfoldPdfUrl ?? null,
     unfoldZipUrl: job.unfoldZipUrl ?? null,
     stats: job.stats ?? null,
     craftability: (job.craftability as CraftabilityScore | undefined) ?? null,
+    status: (job.resultStatus as ProjectStatus) ?? "ready",
   });
-  setStatus((job.resultStatus as ProjectStatus) ?? "ready");
-  setActiveProcessJobId(null);
   clearJobProgressTracking();
   addLog("Papercraft template ready.");
 
