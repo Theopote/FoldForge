@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ImageIcon, Loader2, Sparkles, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +15,12 @@ import {
 } from "@/components/ui/select";
 import { generateFromImage } from "@/lib/api";
 import { pollGenerationJob } from "@/lib/generation-job";
+import { beginJobPoll, cancelJobPoll } from "@/lib/job-poll-session";
 import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { isAbortError } from "@/lib/poll-utils";
 import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { Style } from "@/types";
@@ -36,6 +38,8 @@ export function ImageToModelPanel() {
   const { jobPhase, jobProgress, jobMessage, setGenerationResult, setAsyncGenerationPending, addLog, setError } =
     useStudioStore();
   const showAiProgress = isGenerating && jobPhase === "ai_generation";
+
+  useEffect(() => () => cancelJobPoll("generation"), []);
 
   const handleFile = useCallback((file: File | null) => {
     if (!file) return;
@@ -78,11 +82,15 @@ export function ImageToModelPanel() {
         });
         addLog(`Queued (${aiProvider}). Job: ${data.jobId}`);
         reportJobProgress("ai_generation", 0, "Queued for generation");
+        const signal = beginJobPoll("generation");
         const job = await pollGenerationJob(data.jobId, {
+          signal,
           onProgress: (update) => {
+            if (signal.aborted) return;
             reportJobProgress("ai_generation", update.progress, update.message);
           },
         });
+        if (signal.aborted) return;
         sourceFileUrl = job.sourceFileUrl;
         sourceImageUrl = job.sourceImageUrl ?? sourceImageUrl;
         enhancedPrompt = job.enhancedPrompt ?? enhancedPrompt;
@@ -106,6 +114,8 @@ export function ImageToModelPanel() {
       addLog(`AI model ready (${aiProvider}). Project: ${data.projectId}`);
       clearJobProgressTracking();
     } catch (error) {
+      if (isAbortError(error)) return;
+
       const message =
         error instanceof Error ? error.message : "Image generation failed.";
       setError(message);

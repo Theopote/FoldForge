@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +17,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { processModel } from "@/lib/api";
+import { beginJobPoll, cancelJobPoll } from "@/lib/job-poll-session";
 import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { isAbortError } from "@/lib/poll-utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore } from "@/types";
 
@@ -36,6 +39,8 @@ export function ProjectSettingsPanel() {
     setActiveProcessJobId,
   } = useStudioStore();
 
+  useEffect(() => () => cancelJobPoll("process"), []);
+
   const handleGenerate = async () => {
     if (!projectId) {
       setError("Please upload or generate a 3D model first.");
@@ -48,13 +53,19 @@ export function ProjectSettingsPanel() {
     reportJobProgress("papercraft_process", 0, "Queued");
     addLog("Starting papercraft generation...");
 
+    const signal = beginJobPoll("process");
+
     try {
       const data = await processModel(projectId, settings, {
+        signal,
         onProgress: (job) => {
+          if (signal.aborted) return;
           setActiveProcessJobId(job.jobId);
           reportJobProgress("papercraft_process", job.progress, job.message);
         },
       });
+
+      if (signal.aborted) return;
 
       setActiveProcessJobId(null);
       clearJobProgressTracking();
@@ -82,6 +93,8 @@ export function ProjectSettingsPanel() {
         }
       }
     } catch (error) {
+      if (isAbortError(error)) return;
+
       const message =
         error instanceof Error ? error.message : "Generation failed.";
       setError(message);

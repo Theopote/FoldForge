@@ -11,6 +11,7 @@ import { UnfoldPreviewPanel } from "@/features/unfold-preview/unfold-preview-pan
 import { resumeGenerationIfNeeded } from "@/features/studio/resume-generation";
 import { resumeProcessIfNeeded } from "@/features/studio/resume-process";
 import { ProjectNotFoundError, getProject } from "@/lib/api";
+import { cancelAllJobPolls } from "@/lib/job-poll-session";
 import {
   clearStudioProject,
   loadStudioProject,
@@ -90,6 +91,7 @@ export function StudioWorkspace() {
 
     return () => {
       cancelled = true;
+      cancelAllJobPolls();
     };
   }, [projectId, restoreProject, addLog]);
 

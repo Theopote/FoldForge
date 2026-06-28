@@ -34,15 +34,15 @@ PLACEMENT_STEP_MM = 4.0
 class LayoutIssueReport:
     has_overlaps: bool = False
     overlap_count: int = 0
-    scaled_piece_labels: list[str] = field(default_factory=list)
+    oversize_piece_labels: list[str] = field(default_factory=list)
     overflow_count: int = 0
 
 
 def detect_layout_issues(pages: list[LayoutPage]) -> LayoutIssueReport:
-    """Find page overlaps, scaled-down pieces, and printable-area overflows."""
+    """Find page overlaps, printable-area overflows, and oversize pieces."""
     overlap_count = 0
     overflow_count = 0
-    scaled_labels: list[str] = []
+    oversize_labels: list[str] = []
 
     for page in pages:
         usable_w = page.width_mm - 2 * MARGIN_MM
@@ -52,17 +52,15 @@ def detect_layout_issues(pages: list[LayoutPage]) -> LayoutIssueReport:
 
         for placed in page.placed_pieces:
             piece = placed.piece
-            if piece.id.endswith("-scaled"):
-                label = piece.label or piece.id
-                if label not in scaled_labels:
-                    scaled_labels.append(label)
-
             poly = piece_to_shapely(piece, include_tabs=True, gap_buffer=0.0)
             if poly.is_empty:
                 continue
 
             if not _fits_usable(poly, usable_box):
                 overflow_count += 1
+                label = piece.label or piece.id
+                if label not in oversize_labels:
+                    oversize_labels.append(label)
 
             polys.append(poly)
 
@@ -93,7 +91,7 @@ def detect_layout_issues(pages: list[LayoutPage]) -> LayoutIssueReport:
     return LayoutIssueReport(
         has_overlaps=overlap_count > 0,
         overlap_count=overlap_count,
-        scaled_piece_labels=scaled_labels,
+        oversize_piece_labels=oversize_labels,
         overflow_count=overflow_count,
     )
 
@@ -107,7 +105,8 @@ def layout_pieces(
     """
     Pack pieces using bottom-left nesting with Shapely collision detection.
 
-    Tries 0°/90°/180°/270° rotations and prefers adding pages over scaling.
+    Tries 0°/90°/180°/270° rotations and prefers adding pages.
+    Individual pieces are never scaled — papercraft parts must stay at uniform scale.
     """
     page_width, page_height = PAPER_SIZES_MM[paper_size]
     usable_w = page_width - 2 * MARGIN_MM
@@ -185,10 +184,11 @@ def _place_piece_nesting(
         )
         return
 
-    scaled = _scale_piece_to_fit(piece, usable_w, usable_h)
+    # Too large for the printable area at any rotation — keep original scale and warn.
+    compact = _most_compact_rotation(piece)
     new_page.placed_pieces.append(
         PlacedPiece(
-            piece=translate_piece(scaled, MARGIN_MM, MARGIN_MM),
+            piece=translate_piece(compact, MARGIN_MM, MARGIN_MM),
             offset_x=MARGIN_MM,
             offset_y=MARGIN_MM,
             page_index=new_page.index,
@@ -324,66 +324,15 @@ def _normalize_to_origin(piece: UnfoldPiece) -> UnfoldPiece:
     return translate_piece(piece, -min_x, -min_y)
 
 
-def _scale_piece_to_fit(piece: UnfoldPiece, usable_w: float, usable_h: float) -> UnfoldPiece:
-    best = piece
+def _most_compact_rotation(piece: UnfoldPiece) -> UnfoldPiece:
+    """Pick the rotation with the smallest axis-aligned bounding box."""
+    best = _normalize_to_origin(piece)
     best_area = float("inf")
     for rotation in range(4):
         candidate = _normalize_to_origin(rotate_piece(piece, rotation))
         min_x, min_y, max_x, max_y = piece_bounds(candidate, include_tabs=True)
-        width = max(max_x - min_x, 1e-6)
-        height = max(max_y - min_y, 1e-6)
-        scale = min(usable_w / width, usable_h / height) * 0.98
-        scaled = _scale_piece(candidate, scale)
-        min_x, min_y, max_x, max_y = piece_bounds(scaled, include_tabs=True)
         area = (max_x - min_x) * (max_y - min_y)
         if area < best_area:
             best_area = area
-            best = scaled
-    best.id = f"{piece.id}-scaled"
+            best = candidate
     return best
-
-
-def _scale_piece(piece: UnfoldPiece, scale: float) -> UnfoldPiece:
-    from app.models.geometry import CutLine, FoldLine, Point2D, Tab
-
-    def scale_point(p: Point2D) -> Point2D:
-        return Point2D(p.x * scale, p.y * scale)
-
-    return UnfoldPiece(
-        id=piece.id,
-        face_ids=piece.face_ids,
-        label=piece.label,
-        has_overlap=piece.has_overlap,
-        polygon=[scale_point(p) for p in piece.polygon],
-        tabs=[
-            Tab(
-                id=t.id,
-                edge_id=t.edge_id,
-                target_piece_id=t.target_piece_id,
-                label=t.label,
-                polygon=[scale_point(p) for p in t.polygon],
-            )
-            for t in piece.tabs
-        ],
-        fold_lines=[
-            FoldLine(
-                id=f.id,
-                fold_type=f.fold_type,
-                start=scale_point(f.start),
-                end=scale_point(f.end),
-            )
-            for f in piece.fold_lines
-        ],
-        cut_lines=[
-            CutLine(
-                id=c.id,
-                start=scale_point(c.start),
-                end=scale_point(c.end),
-                mesh_edge=c.mesh_edge,
-            )
-            for c in piece.cut_lines
-        ],
-        cut_outline=(
-            [scale_point(p) for p in piece.cut_outline] if piece.cut_outline else None
-        ),
-    )

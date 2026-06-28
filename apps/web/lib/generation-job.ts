@@ -1,5 +1,7 @@
 /** Poll async AI generation jobs until complete or failed. */
 
+import { abortableDelay, throwIfAborted } from "@/lib/poll-utils";
+
 export type GenerationJobResponse = {
   jobId: string;
   projectId: string;
@@ -17,6 +19,7 @@ export type GenerationJobResponse = {
 export type PollOptions = {
   intervalMs?: number;
   timeoutMs?: number;
+  signal?: AbortSignal;
   onProgress?: (job: GenerationJobResponse) => void;
 };
 
@@ -32,16 +35,20 @@ export async function pollGenerationJob(
 ): Promise<GenerationJobResponse> {
   const intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const { signal } = options;
   const started = Date.now();
 
   while (Date.now() - started < timeoutMs) {
-    const response = await fetch(`/api/generation-jobs/${jobId}`);
+    throwIfAborted(signal);
+
+    const response = await fetch(`/api/generation-jobs/${jobId}`, { signal });
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { detail?: string };
       throw new Error(body.detail ?? "Failed to fetch generation job status.");
     }
 
     const job = (await response.json()) as GenerationJobResponse;
+    throwIfAborted(signal);
     options.onProgress?.(job);
 
     if (job.status === "completed") {
@@ -51,7 +58,7 @@ export async function pollGenerationJob(
       throw new Error(job.error ?? "AI generation failed.");
     }
 
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    await abortableDelay(intervalMs, signal);
   }
 
   throw new Error("Generation timed out. Please try again later.");

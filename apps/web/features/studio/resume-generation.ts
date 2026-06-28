@@ -4,10 +4,12 @@ import {
 } from "@/lib/api";
 import type { GenerationJobResponse } from "@/lib/generation-job";
 import { pollGenerationJob } from "@/lib/generation-job";
+import { beginJobPoll } from "@/lib/job-poll-session";
 import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { isAbortError } from "@/lib/poll-utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { ProjectStatus } from "@/types";
 
@@ -56,14 +58,19 @@ export async function resumeGenerationJob(jobId: string): Promise<void> {
 
   if (!projectId) return;
 
+  const signal = beginJobPoll("generation");
   addLog(`Resuming AI generation (job ${jobId})...`);
 
   try {
     const job = await pollGenerationJob(jobId, {
+      signal,
       onProgress: (update) => {
+        if (signal.aborted) return;
         reportJobProgress("ai_generation", update.progress, update.message);
       },
     });
+
+    if (signal.aborted) return;
 
     if (!job.sourceFileUrl) {
       throw new Error("Generation completed but no model URL was returned.");
@@ -82,6 +89,8 @@ export async function resumeGenerationJob(jobId: string): Promise<void> {
     addLog(`AI model ready (${job.provider}). Project: ${projectId}`);
     clearJobProgressTracking();
   } catch (error) {
+    if (isAbortError(error)) return;
+
     const message =
       error instanceof Error ? error.message : "Generation resume failed.";
     setError(message);
@@ -131,7 +140,6 @@ export async function resumeGenerationIfNeeded(
       reportJobProgress("ai_generation", job.progress, job.message);
     } catch (error) {
       if (error instanceof GenerationJobNotFoundError) return;
-      // Network or server error — cannot resolve jobId without the backend.
       return;
     }
   }

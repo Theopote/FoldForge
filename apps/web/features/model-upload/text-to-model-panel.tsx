@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Sparkles, Wand2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +15,12 @@ import {
 } from "@/components/ui/select";
 import { generateFromText } from "@/lib/api";
 import { pollGenerationJob } from "@/lib/generation-job";
+import { beginJobPoll, cancelJobPoll } from "@/lib/job-poll-session";
 import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { isAbortError } from "@/lib/poll-utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { Style } from "@/types";
 
@@ -37,6 +39,8 @@ export function TextToModelPanel() {
   const { jobPhase, jobProgress, jobMessage, setGenerationResult, setAsyncGenerationPending, addLog, setError } =
     useStudioStore();
   const showAiProgress = isGenerating && jobPhase === "ai_generation";
+
+  useEffect(() => () => cancelJobPoll("generation"), []);
 
   const handleGenerate = async () => {
     if (prompt.trim().length < 3) {
@@ -67,11 +71,15 @@ export function TextToModelPanel() {
         });
         addLog(`Queued (${aiProvider}). Job: ${data.jobId}`);
         reportJobProgress("ai_generation", 0, "Queued for generation");
+        const signal = beginJobPoll("generation");
         const job = await pollGenerationJob(data.jobId, {
+          signal,
           onProgress: (update) => {
+            if (signal.aborted) return;
             reportJobProgress("ai_generation", update.progress, update.message);
           },
         });
+        if (signal.aborted) return;
         sourceFileUrl = job.sourceFileUrl;
         enhancedPrompt = job.enhancedPrompt ?? enhancedPrompt;
         aiProvider = job.provider;
@@ -96,6 +104,8 @@ export function TextToModelPanel() {
       }
       clearJobProgressTracking();
     } catch (error) {
+      if (isAbortError(error)) return;
+
       const message =
         error instanceof Error ? error.message : "Text generation failed.";
       setError(message);

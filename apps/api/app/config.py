@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     process_worker_id: str | None = None
     process_job_lease_sec: int = 600
 
-    # Papercraft quality
+    # Papercraft quality — strict (default) vs warning overlap policy; see unfold_repair
     block_export_on_unfold_overlap: bool = True
 
 

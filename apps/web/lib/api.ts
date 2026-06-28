@@ -215,11 +215,13 @@ export async function processModel(
   settings: Record<string, unknown>,
   options?: {
     onProgress?: (job: ProcessJobResponse) => void;
+    signal?: AbortSignal;
   },
 ): Promise<ProcessModelResponse> {
   const accepted = await startProcessModel(projectId, settings);
   const job = await pollProcessJob(accepted.jobId, {
     onProgress: options?.onProgress,
+    signal: options?.signal,
   });
 
   return {

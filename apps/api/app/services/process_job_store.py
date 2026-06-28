@@ -200,6 +200,8 @@ class ProcessJobStore:
         result_status=None,
         stats=None,
         craftability=None,
+        export_blocked: bool | None = None,
+        has_unfold_overlap: bool | None = None,
     ) -> ProcessJob | None:
         job = self.get(job_id)
         if job is None:
@@ -229,6 +231,10 @@ class ProcessJobStore:
             job.stats = stats
         if craftability is not None:
             job.craftability = craftability
+        if export_blocked is not None:
+            job.export_blocked = export_blocked
+        if has_unfold_overlap is not None:
+            job.has_unfold_overlap = has_unfold_overlap
 
         job.updated_at = datetime.now(timezone.utc)
         self._save(job)

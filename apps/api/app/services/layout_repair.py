@@ -17,7 +17,7 @@ class LayoutRepairResult:
     pages: list[LayoutPage]
     messages: list[str] = field(default_factory=list)
     has_overlaps: bool = False
-    scaled_piece_labels: list[str] = field(default_factory=list)
+    oversize_piece_labels: list[str] = field(default_factory=list)
 
 
 def layout_with_repair(
@@ -39,7 +39,7 @@ def layout_with_repair(
         last_pages = pages
         last_issues = issues
 
-        if not issues.has_overlaps and not issues.scaled_piece_labels:
+        if not issues.has_overlaps and not issues.oversize_piece_labels:
             if attempt > 0:
                 messages.append(
                     f"Layout auto-repair resolved page overlaps (gap {gap_mm:.0f} mm)."
@@ -48,7 +48,7 @@ def layout_with_repair(
                 pages=pages,
                 messages=messages,
                 has_overlaps=False,
-                scaled_piece_labels=[],
+                oversize_piece_labels=[],
             )
 
     overlap_msg = (
@@ -56,12 +56,13 @@ def layout_with_repair(
         if last_issues.has_overlaps
         else ""
     )
-    scaled_msg = (
-        f"Piece(s) {', '.join(last_issues.scaled_piece_labels)} were scaled down to fit."
-        if last_issues.scaled_piece_labels
+    oversize_msg = (
+        f"Piece(s) {', '.join(last_issues.oversize_piece_labels)} exceed the printable area — "
+        "reduce target height or use larger paper (e.g. A3)."
+        if last_issues.oversize_piece_labels
         else ""
     )
-    detail = " ".join(part for part in (overlap_msg, scaled_msg) if part)
+    detail = " ".join(part for part in (overlap_msg, oversize_msg) if part)
     if detail:
         messages.append(detail)
 
@@ -69,7 +70,7 @@ def layout_with_repair(
         pages=last_pages,
         messages=messages,
         has_overlaps=last_issues.has_overlaps,
-        scaled_piece_labels=last_issues.scaled_piece_labels,
+        oversize_piece_labels=last_issues.oversize_piece_labels,
     )
 
 

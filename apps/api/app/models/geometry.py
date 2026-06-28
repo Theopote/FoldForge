@@ -83,3 +83,4 @@ class PipelineResult:
     craftability_level: str
     warnings: list[str]
     export_blocked: bool = False
+    has_unfold_overlap: bool = False

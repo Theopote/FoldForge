@@ -35,6 +35,7 @@ class UnfoldRepairResult:
     repair_steps: int
     messages: list[str]
     export_blocked: bool = False
+    has_unfold_overlap: bool = False
 
 
 def unfold_with_auto_repair(
@@ -49,6 +50,10 @@ def unfold_with_auto_repair(
     Unfold mesh patches and iteratively add repair seams when overlaps remain.
 
     Seam selection prefers edges adjacent to the largest 2D face overlaps.
+
+    Overlap policy (``block_export_on_failure``, default from settings):
+    - Strict: unresolved overlaps raise ``UnfoldRepairError`` — no export.
+    - Warning: pipeline continues; ``has_unfold_overlap=True``, ``export_blocked=False``.
     """
     if block_export_on_failure is None:
         block_export_on_failure = settings.block_export_on_unfold_overlap
@@ -93,15 +98,14 @@ def unfold_with_auto_repair(
         pieces = unfold_mesh(mesh, patches, dihedral=data)
 
     remaining = sum(1 for piece in pieces if piece.has_overlap)
-    export_blocked = False
+    has_unfold_overlap = remaining > 0
 
-    if remaining > 0:
+    if has_unfold_overlap:
         messages.append(
             f"{remaining} piece(s) still overlap after auto-repair — "
             "the template may not fold correctly. Try Easy mode or a simpler model."
         )
         if block_export_on_failure:
-            export_blocked = True
             warning_text = collect_unfold_warnings(pieces, messages)
             raise UnfoldRepairError(
                 "Unfold overlaps could not be fully repaired. "
@@ -115,7 +119,8 @@ def unfold_with_auto_repair(
         patches=patches,
         repair_steps=repair_steps,
         messages=messages,
-        export_blocked=export_blocked,
+        export_blocked=False,
+        has_unfold_overlap=has_unfold_overlap,
     )
 
 

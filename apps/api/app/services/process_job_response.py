@@ -19,4 +19,6 @@ def build_process_job_response(job: ProcessJob) -> ProcessJobResponse:
         resultStatus=job.result_status,
         stats=job.stats,
         craftability=job.craftability,
+        exportBlocked=job.export_blocked,
+        hasUnfoldOverlap=job.has_unfold_overlap,
     )

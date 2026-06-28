@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { ModelMeshStats } from "@/lib/geometry-stats";
+import { cancelAllJobPolls } from "@/lib/job-poll-session";
 import type { SavedStudioProject } from "@/lib/project-storage";
 import {
   persistStudioProject,
@@ -145,6 +146,7 @@ export const useStudioStore = create<StudioState>((set) => ({
   setSourceType: (sourceType) => set({ sourceType }),
   setUploadResult: ({ projectId, sourceFileUrl, fileName }) =>
     set((state) => {
+      cancelAllJobPolls();
       const next: StudioState = {
         ...state,
         projectId,
@@ -180,6 +182,7 @@ export const useStudioStore = create<StudioState>((set) => ({
     }),
   setGenerationResult: (payload) =>
     set((state) => {
+      cancelAllJobPolls();
       const next: StudioState = {
         ...state,
         projectId: payload.projectId,
@@ -215,6 +218,7 @@ export const useStudioStore = create<StudioState>((set) => ({
     }),
   setAsyncGenerationPending: (payload) =>
     set((state) => {
+      cancelAllJobPolls();
       const next: StudioState = {
         ...state,
         projectId: payload.projectId,

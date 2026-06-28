@@ -51,7 +51,12 @@ def run_pipeline(
 
     report(35, "Unfolding patches")
     dihedral = compute_edge_dihedral_angles(mesh)
-    unfold_result = unfold_with_auto_repair(mesh, settings.difficulty, dihedral=dihedral)
+    unfold_result = unfold_with_auto_repair(
+        mesh,
+        settings.difficulty,
+        dihedral=dihedral,
+        block_export_on_failure=app_settings.block_export_on_unfold_overlap,
+    )
     pieces = unfold_result.pieces
     unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
 
@@ -86,7 +91,7 @@ def run_pipeline(
         settings.difficulty,
         quality_warnings + unfold_warnings + layout_warnings,
         layout_has_overlaps=layout_result.has_overlaps,
-        layout_scaled_labels=layout_result.scaled_piece_labels,
+        layout_oversize_labels=layout_result.oversize_piece_labels,
     )
 
     zip_path = app_settings.exports_dir / f"{project_id}.zip"
@@ -129,7 +134,8 @@ def run_pipeline(
         craftability_score=craft_score,
         craftability_level=craft_level,
         warnings=craft_warnings,
-        export_blocked=False,
+        export_blocked=unfold_result.export_blocked,
+        has_unfold_overlap=unfold_result.has_unfold_overlap,
     )
 
 

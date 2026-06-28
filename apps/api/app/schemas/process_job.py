@@ -28,6 +28,8 @@ class ProcessJob(BaseModel):
     result_status: ProjectStatus | None = Field(alias="resultStatus", default=None)
     stats: ProcessStats | None = None
     craftability: CraftabilityScore | None = None
+    export_blocked: bool = Field(alias="exportBlocked", default=False)
+    has_unfold_overlap: bool = Field(alias="hasUnfoldOverlap", default=False)
     locked_by: str | None = Field(alias="lockedBy", default=None)
     locked_until: datetime | None = Field(alias="lockedUntil", default=None)
     attempts: int = 0
@@ -53,5 +55,7 @@ class ProcessJobResponse(BaseModel):
     result_status: ProjectStatus | None = Field(alias="resultStatus", default=None)
     stats: ProcessStats | None = None
     craftability: CraftabilityScore | None = None
+    export_blocked: bool = Field(alias="exportBlocked", default=False)
+    has_unfold_overlap: bool = Field(alias="hasUnfoldOverlap", default=False)
 
     model_config = {"populate_by_name": True}

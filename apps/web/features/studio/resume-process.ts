@@ -2,12 +2,14 @@ import {
   ProcessJobNotFoundError,
   getProjectProcessJob,
 } from "@/lib/api";
+import { beginJobPoll } from "@/lib/job-poll-session";
 import type { ProcessJobResponse } from "@/lib/process-job";
 import { pollProcessJob } from "@/lib/process-job";
 import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { isAbortError } from "@/lib/poll-utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore, ProjectStatus } from "@/types";
 
@@ -48,17 +50,25 @@ export async function resumeProcessJob(jobId: string): Promise<void> {
   const { addLog, setError, setStatus, setActiveProcessJobId } =
     useStudioStore.getState();
 
+  const signal = beginJobPoll("process");
   addLog(`Resuming papercraft processing (job ${jobId})...`);
 
   try {
     const job = await pollProcessJob(jobId, {
+      signal,
       onProgress: (update) => {
+        if (signal.aborted) return;
         setActiveProcessJobId(update.jobId);
         reportJobProgress("papercraft_process", update.progress, update.message);
       },
     });
+
+    if (signal.aborted) return;
+
     applyCompletedProcessJob(job);
   } catch (error) {
+    if (isAbortError(error)) return;
+
     const message =
       error instanceof Error ? error.message : "Processing resume failed.";
     setError(message);
