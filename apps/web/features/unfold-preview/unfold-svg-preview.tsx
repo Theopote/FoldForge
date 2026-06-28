@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { unfoldPreviewUrl } from "@/lib/unfold-preview-url";
 import {
   formatSeamTooltip,
-  normalizeMeshEdgeKey,
+  readSeamLineMetadata,
   parseSeamManifest,
   seamManifestPreviewUrl,
   type SeamManifest,
@@ -122,8 +122,8 @@ export function UnfoldSvgPreview({
   const handleSeamClick = useCallback(
     (event: Event) => {
       const target = event.currentTarget as SVGLineElement;
-      const meshEdge = normalizeMeshEdgeKey(target.getAttribute("data-mesh-edge"));
-      if (!meshEdge) {
+      const meta = readSeamLineMetadata(target);
+      if (!meta.meshEdge) {
         return;
       }
 
@@ -132,19 +132,20 @@ export function UnfoldSvgPreview({
         .forEach((node) => node.classList.remove("seam-selected"));
       target.classList.add("seam-selected");
 
-      const manifestEdge = manifest?.edges[meshEdge];
-      const pieceLabel = target.getAttribute("data-piece-label");
-      const edgeKind = target.getAttribute("data-edge-kind");
-      const foldType = target.getAttribute("data-fold-type");
+      const manifestEdge = manifest?.edges[meta.meshEdge];
 
       setSelectedSeam({
-        meshEdge,
-        pieceLabel: pieceLabel ?? "",
-        edgeKind: edgeKind ?? "cut",
-        foldType,
+        meshEdge: meta.meshEdge,
+        pieceLabel: meta.pieceLabel,
+        edgeKind: meta.edgeKind,
+        foldType: meta.foldType,
         tooltip: formatSeamTooltip(
-          meshEdge,
-          { pieceLabel, edgeKind, foldType },
+          meta.meshEdge,
+          {
+            pieceLabel: meta.pieceLabel,
+            edgeKind: meta.edgeKind,
+            foldType: meta.foldType,
+          },
           manifestEdge,
         ),
       });

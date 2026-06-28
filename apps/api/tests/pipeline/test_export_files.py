@@ -48,6 +48,10 @@ def test_export_files_from_cube_pipeline(run_pipeline_sync, fast_layout, test_en
         steps_svg = archive.read("assembly-steps.svg").decode("utf-8")
         assert "Step 1:" in steps_svg
 
+    seams_path = settings.exports_dir / "export_cube.seams.json"
+    assert seams_path.exists()
+    assert "edges" in seams_path.read_text(encoding="utf-8")
+
     assert result.craftability_score >= 0
     assert result.craftability_score <= 100
 

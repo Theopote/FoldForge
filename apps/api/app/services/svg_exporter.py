@@ -273,41 +273,72 @@ def _draw_seam_hit_targets(
 
     if include_cuts:
         for cut in piece.cut_lines:
-            seams_layer.add(
-                drawing.line(
-                    start=(cut.start.x, _svg_y(page_height_mm, y_offset, cut.start.y)),
-                    end=(cut.end.x, _svg_y(page_height_mm, y_offset, cut.end.y)),
-                    stroke="transparent",
-                    stroke_width=2.5,
-                    class_="seam-edge seam-cut",
-                    **{
-                        "data-piece-id": piece.id,
-                        "data-piece-label": piece.label,
-                        "data-line-id": cut.id,
-                        "data-edge-kind": "cut",
-                        **_mesh_edge_data(cut.mesh_edge),
-                    },
-                )
+            _add_seam_hit_line(
+                drawing,
+                seams_layer,
+                start=(cut.start.x, _svg_y(page_height_mm, y_offset, cut.start.y)),
+                end=(cut.end.x, _svg_y(page_height_mm, y_offset, cut.end.y)),
+                stroke_width=2.5,
+                class_name="seam-edge seam-cut",
+                attrs={
+                    "data-piece-id": piece.id,
+                    "data-piece-label": piece.label,
+                    "data-line-id": cut.id,
+                    "data-edge-kind": "cut",
+                    **_mesh_edge_data(cut.mesh_edge),
+                },
             )
 
     if include_folds:
         for fold in piece.fold_lines:
-            seams_layer.add(
-                drawing.line(
-                    start=(fold.start.x, _svg_y(page_height_mm, y_offset, fold.start.y)),
-                    end=(fold.end.x, _svg_y(page_height_mm, y_offset, fold.end.y)),
-                    stroke="transparent",
-                    stroke_width=2.0,
-                    class_="seam-edge seam-fold",
-                    **{
-                        "data-piece-id": piece.id,
-                        "data-piece-label": piece.label,
-                        "data-line-id": fold.id,
-                        "data-edge-kind": "fold",
-                        "data-fold-type": fold.fold_type,
-                        **_mesh_edge_data(fold.mesh_edge),
-                    },
-                )
+            _add_seam_hit_line(
+                drawing,
+                seams_layer,
+                start=(fold.start.x, _svg_y(page_height_mm, y_offset, fold.start.y)),
+                end=(fold.end.x, _svg_y(page_height_mm, y_offset, fold.end.y)),
+                stroke_width=2.0,
+                class_name="seam-edge seam-fold",
+                attrs={
+                    "data-piece-id": piece.id,
+                    "data-piece-label": piece.label,
+                    "data-line-id": fold.id,
+                    "data-edge-kind": "fold",
+                    "data-fold-type": fold.fold_type,
+                    **_mesh_edge_data(fold.mesh_edge),
+                },
             )
 
     return seams_layer
+
+
+def _add_seam_hit_line(
+    drawing: svgwrite.Drawing,
+    group: svgwrite.container.Group,
+    *,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    stroke_width: float,
+    class_name: str,
+    attrs: dict[str, str],
+) -> None:
+    line = drawing.line(
+        start=start,
+        end=end,
+        stroke="#000000",
+        stroke_width=stroke_width,
+        stroke_opacity=0,
+        class_=class_name,
+        id=attrs.get("data-line-id"),
+    )
+    title = "|".join(
+        [
+            attrs.get("data-edge-kind", ""),
+            attrs.get("data-piece-id", ""),
+            attrs.get("data-piece-label", ""),
+            attrs.get("data-mesh-edge", ""),
+            attrs.get("data-line-id", ""),
+            attrs.get("data-fold-type", ""),
+        ]
+    )
+    line.add(drawing.title(title))
+    group.add(line)

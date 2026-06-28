@@ -86,6 +86,54 @@ export function normalizeMeshEdgeKey(raw: string | null | undefined): string | n
   return a <= b ? `${a},${b}` : `${b},${a}`;
 }
 
+export function parseSeamLineTitle(title: string | null | undefined): {
+  edgeKind: string;
+  pieceId: string;
+  pieceLabel: string;
+  meshEdge: string | null;
+  lineId: string;
+  foldType: string | null;
+} | null {
+  if (!title) {
+    return null;
+  }
+  const [edgeKind, pieceId, pieceLabel, meshEdge, lineId, foldType] = title.split("|");
+  if (!edgeKind || !pieceLabel) {
+    return null;
+  }
+  return {
+    edgeKind,
+    pieceId: pieceId ?? "",
+    pieceLabel,
+    meshEdge: normalizeMeshEdgeKey(meshEdge),
+    lineId: lineId ?? "",
+    foldType: foldType || null,
+  };
+}
+
+export function readSeamLineMetadata(line: Element): {
+  edgeKind: string;
+  pieceId: string;
+  pieceLabel: string;
+  meshEdge: string | null;
+  lineId: string;
+  foldType: string | null;
+} {
+  const titleNode = line.querySelector("title");
+  const fromTitle = parseSeamLineTitle(titleNode?.textContent);
+  if (fromTitle) {
+    return fromTitle;
+  }
+  return {
+    edgeKind: line.getAttribute("data-edge-kind") ?? "cut",
+    pieceId: line.getAttribute("data-piece-id") ?? "",
+    pieceLabel: line.getAttribute("data-piece-label") ?? "",
+    meshEdge: normalizeMeshEdgeKey(line.getAttribute("data-mesh-edge")),
+    lineId: line.getAttribute("data-line-id") ?? line.id ?? "",
+    foldType: line.getAttribute("data-fold-type"),
+  };
+}
+
 export function formatSeamTooltip(
   meshEdge: string,
   attrs: {
