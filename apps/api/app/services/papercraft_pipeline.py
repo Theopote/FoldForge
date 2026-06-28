@@ -13,6 +13,12 @@ from app.services.layout_repair import (
     ensure_layout_exportable,
     layout_with_repair,
 )
+from app.services.material_cache import (
+    apply_color_mode_to_cached_pieces,
+    face_color_cache_from_material,
+    save_material_cache,
+    try_restore_geometry_cache,
+)
 from app.services.mesh_cleaner import clean_mesh, mesh_quality_issues
 from app.services.mesh_simplifier import scale_to_target_height, simplify_mesh
 from app.services.model_loader import load_mesh
@@ -52,35 +58,79 @@ def run_pipeline(
     mesh = load_mesh(source_path)
     quality_warnings = mesh_quality_issues(mesh)
 
+    cached_pieces, material_cache = try_restore_geometry_cache(
+        project_id,
+        source_path,
+        settings,
+    )
+    used_geometry_cache = cached_pieces is not None
+    face_colors: dict[int, str] = dict(
+        face_color_cache_from_material(material_cache) or {}
+    )
+
     report(15, "Cleaning and simplifying mesh")
     mesh = clean_mesh(mesh)
     mesh = scale_to_target_height(mesh, settings.target_height_mm)
     mesh = simplify_mesh(mesh, settings.difficulty, settings.style)
-
-    report(35, "Unfolding patches")
     dihedral = compute_edge_dihedral_angles(mesh)
-    unfold_result = unfold_with_auto_repair(
-        mesh,
-        settings.difficulty,
-        dihedral=dihedral,
-        block_export_on_failure=app_settings.block_export_on_unfold_overlap,
-        cancel_check=cancel_check,
-    )
-    pieces = unfold_result.pieces
-    unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
 
-    if settings.color_mode == ColorMode.COLOR:
+    if used_geometry_cache and cached_pieces is not None:
+        report(35, "Restoring cached unfold geometry")
+        pieces = cached_pieces
+        unfold_warnings = []
+        unfold_result = None
+    else:
+        report(35, "Unfolding patches")
+        unfold_result = unfold_with_auto_repair(
+            mesh,
+            settings.difficulty,
+            dihedral=dihedral,
+            block_export_on_failure=app_settings.block_export_on_unfold_overlap,
+            cancel_check=cancel_check,
+        )
+        pieces = unfold_result.pieces
+        unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
+
+    need_color_rebake = False
+    if used_geometry_cache and cached_pieces is not None:
+        need_color_rebake = apply_color_mode_to_cached_pieces(
+            pieces,
+            settings,
+            material_cache,
+        )
+
+    if settings.color_mode == ColorMode.COLOR and (
+        not used_geometry_cache or need_color_rebake
+    ):
         report(48, "Baking surface colors")
-        pieces, _bake_stats = bake_piece_textures(mesh, pieces, dihedral)
+        face_color_cache = face_colors or None
+        pieces, bake_stats = bake_piece_textures(
+            mesh,
+            pieces,
+            dihedral,
+            face_color_cache=face_color_cache,
+        )
+        face_colors = bake_stats.face_colors
+    elif settings.color_mode == ColorMode.LINE_ART and used_geometry_cache:
+        apply_color_mode_to_cached_pieces(pieces, settings, material_cache)
 
-    report(55, "Adding tabs and cut lines")
-    pieces = add_tabs_to_pieces(
-        pieces,
-        add_tabs=settings.add_tabs,
-        add_numbers=settings.add_numbers,
+    if not used_geometry_cache:
+        report(55, "Adding tabs and cut lines")
+        pieces = add_tabs_to_pieces(
+            pieces,
+            add_tabs=settings.add_tabs,
+            add_numbers=settings.add_numbers,
+        )
+        if settings.add_tabs:
+            pieces = optimize_pieces_cut_outlines(pieces)
+
+    save_material_cache(
+        project_id,
+        source_path=source_path,
+        settings=settings,
+        pieces=pieces,
+        face_colors=face_colors,
     )
-    if settings.add_tabs:
-        pieces = optimize_pieces_cut_outlines(pieces)
 
     report(70, "Laying out pages")
     layout_result = layout_with_repair(
@@ -141,6 +191,9 @@ def run_pipeline(
 
     report(100, "Complete")
 
+    export_blocked = unfold_result.export_blocked if unfold_result else False
+    has_unfold_overlap = unfold_result.has_unfold_overlap if unfold_result else False
+
     return PipelineResult(
         processed_mesh_path=build_storage_url(Path("processed") / processed_path.name),
         svg_path=build_storage_url(Path("exports") / svg_path.name),
@@ -153,8 +206,8 @@ def run_pipeline(
         craftability_score=craft_score,
         craftability_level=craft_level,
         warnings=craft_warnings,
-        export_blocked=unfold_result.export_blocked,
-        has_unfold_overlap=unfold_result.has_unfold_overlap,
+        export_blocked=export_blocked,
+        has_unfold_overlap=has_unfold_overlap,
     )
 
 

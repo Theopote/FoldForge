@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     uploads_dir: Path = storage_root / "uploads"
     processed_dir: Path = storage_root / "processed"
     exports_dir: Path = storage_root / "exports"
+    cache_dir: Path = storage_root / "cache"
 
     cors_origins: list[str] = [
         "http://localhost:3000",
@@ -90,6 +91,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    material_cache_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "MATERIAL_CACHE_ENABLED",
+            "FOLDFORGE_MATERIAL_CACHE_ENABLED",
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_auth_settings(self):
         if self.require_api_auth and not self.api_key:
@@ -100,5 +109,10 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Ensure storage directories exist at startup
-for directory in (settings.uploads_dir, settings.processed_dir, settings.exports_dir):
+for directory in (
+    settings.uploads_dir,
+    settings.processed_dir,
+    settings.exports_dir,
+    settings.cache_dir,
+):
     directory.mkdir(parents=True, exist_ok=True)

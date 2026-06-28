@@ -49,7 +49,8 @@ def test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     uploads = storage_root / "uploads"
     processed = storage_root / "processed"
     exports = storage_root / "exports"
-    for directory in (uploads, processed, exports):
+    cache = storage_root / "cache"
+    for directory in (uploads, processed, exports, cache):
         directory.mkdir(parents=True)
 
     db_path = storage_root / "test.db"
@@ -57,6 +58,7 @@ def test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(settings, "uploads_dir", uploads)
     monkeypatch.setattr(settings, "processed_dir", processed)
     monkeypatch.setattr(settings, "exports_dir", exports)
+    monkeypatch.setattr(settings, "cache_dir", cache)
     monkeypatch.setattr(settings, "database_path", db_path)
 
     test_db = Database(db_path)

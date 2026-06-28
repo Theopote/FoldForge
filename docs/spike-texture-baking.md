@@ -37,6 +37,8 @@ Implementation: `app/services/texture_baker.py`
 
 **Studio preview:** unfold panel renders the exported SVG (includes baked fills when `colorMode=color`), with storage auth, cache-bust revision, and stale-preview hint when settings change after export.
 
+**Material cache:** geometry + face colors persisted under `storage/cache/`; unchanged geometry settings skip unfold/tabs on regenerate (layout-only changes).
+
 ## Pipeline hook
 
 When `ProjectSettings.colorMode == "color"`:
@@ -54,8 +56,9 @@ Progress message: `"Baking surface colors"`.
 ## Next steps
 
 1. **Raster mode** — optional high-res bake for photo textures (`512px` short edge)
-2. **Material cache** — persist baked triangles on project for re-layout without re-unfold
-3. **Quality** — barycentric UV sampling + mip-aware filtering for large faces
+2. **Quality** — barycentric UV sampling + mip-aware filtering for large faces
+
+**Material cache:** `storage/cache/{project_id}.material.json` stores unfold geometry, baked triangles, and per-face fill colors. When source + geometry settings are unchanged, the pipeline skips unfold/tabs and re-runs layout + export only (e.g. paper size change). Face-color cache avoids re-sampling mesh textures on color rebake.
 
 ## Risks
 

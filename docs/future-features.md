@@ -40,8 +40,9 @@ Existing pieces: `score_seams_by_overlap`, `find_best_split_seam_in_patch`, `unf
 
 **Remaining for full Phase 3:**
 
-1. Texture baking from source mesh / AI materials → piece SVG fills
-2. Paper stock presets (kraft, white, colored cardstock)
-3. Paper thickness compensation (fold offset)
+1. Texture baking from source mesh / AI materials → piece SVG fills ✅ (spike)
+2. Material cache for layout-only re-export ✅
+3. Paper stock presets (kraft, white, colored cardstock)
+4. Paper thickness compensation (fold offset)
 
 See `docs/roadmap.md` for updated Phase 3 ordering.

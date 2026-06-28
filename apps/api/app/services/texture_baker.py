@@ -19,22 +19,30 @@ class TextureBakeStats:
     triangle_count: int
     used_vertex_colors: bool
     used_texture_map: bool
+    used_face_color_cache: bool
+    face_colors: dict[int, str]
 
 
 def bake_piece_textures(
     mesh: trimesh.Trimesh,
     pieces: list[UnfoldPiece],
     dihedral: EdgeDihedralData,
+    *,
+    face_color_cache: dict[int, str] | None = None,
 ) -> tuple[list[UnfoldPiece], TextureBakeStats]:
     """
     Sample mesh surface color for each unfold face and attach SVG-ready triangles.
 
     Supports vertex colors and GLB/GLTF texture maps. Meshes without color data
     receive a neutral gray fill so ``colorMode=color`` still renders consistently.
+
+    When ``face_color_cache`` is provided, mesh sampling is skipped for cached faces.
     """
-    sampler = _MeshColorSampler(mesh)
+    sampler = _MeshColorSampler(mesh) if face_color_cache is None else None
     pieces_with_color = 0
     triangle_count = 0
+    used_face_color_cache = False
+    face_colors: dict[int, str] = dict(face_color_cache or {})
 
     for piece in pieces:
         if not piece.face_ids:
@@ -44,9 +52,18 @@ def bake_piece_textures(
         baked: list[BakedTriangle] = []
 
         for face_idx in piece.face_ids:
-            triangle = _bake_face_triangle(mesh, face_idx, vertex_2d, sampler)
+            triangle = _bake_face_triangle(
+                mesh,
+                face_idx,
+                vertex_2d,
+                sampler,
+                face_color_cache=face_colors if face_color_cache is not None else None,
+            )
             if triangle is not None:
                 baked.append(triangle)
+                face_colors[int(face_idx)] = triangle.fill
+                if face_color_cache is not None and int(face_idx) in face_color_cache:
+                    used_face_color_cache = True
 
         piece.baked_triangles = baked
         if baked:
@@ -56,8 +73,10 @@ def bake_piece_textures(
     return pieces, TextureBakeStats(
         pieces_with_color=pieces_with_color,
         triangle_count=triangle_count,
-        used_vertex_colors=sampler.used_vertex_colors,
-        used_texture_map=sampler.used_texture_map,
+        used_vertex_colors=bool(sampler and sampler.used_vertex_colors),
+        used_texture_map=bool(sampler and sampler.used_texture_map),
+        used_face_color_cache=used_face_color_cache,
+        face_colors=face_colors,
     )
 
 
@@ -65,23 +84,29 @@ def _bake_face_triangle(
     mesh: trimesh.Trimesh,
     face_idx: int,
     vertex_2d: dict[int, Point2D],
-    sampler: "_MeshColorSampler",
+    sampler: "_MeshColorSampler | None",
+    *,
+    face_color_cache: dict[int, str] | None = None,
 ) -> BakedTriangle | None:
     face = mesh.faces[face_idx]
     points: list[Point2D] = []
     colors: list[tuple[int, int, int]] = []
+    cached_fill = face_color_cache.get(int(face_idx)) if face_color_cache else None
 
     for vertex_idx in face:
         vi = int(vertex_idx)
         if vi not in vertex_2d:
             return None
         points.append(vertex_2d[vi])
-        colors.append(sampler.color_at_vertex(vi, face_idx))
+        if cached_fill is None:
+            if sampler is None:
+                return None
+            colors.append(sampler.color_at_vertex(vi, face_idx))
 
     if len(points) != 3:
         return None
 
-    fill = _rgb_to_hex(_average_rgb(colors))
+    fill = cached_fill if cached_fill is not None else _rgb_to_hex(_average_rgb(colors))
     return BakedTriangle(a=points[0], b=points[1], c=points[2], fill=fill)
 
 
