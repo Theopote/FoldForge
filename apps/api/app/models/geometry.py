@@ -28,6 +28,7 @@ class FoldLine:
     start: Point2D
     end: Point2D
     fold_type: Literal["mountain", "valley"]
+    mesh_edge: tuple[int, int] | None = None
 
 
 @dataclass

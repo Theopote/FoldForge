@@ -194,6 +194,7 @@ def serialize_piece(piece: UnfoldPiece) -> dict[str, Any]:
                 "start": _point_to_dict(line.start),
                 "end": _point_to_dict(line.end),
                 "foldType": line.fold_type,
+                "meshEdge": [int(v) for v in line.mesh_edge] if line.mesh_edge else None,
             }
             for line in piece.fold_lines
         ],
@@ -254,6 +255,7 @@ def deserialize_piece(payload: dict[str, Any]) -> UnfoldPiece:
                 start=_point_from_dict(line["start"]),
                 end=_point_from_dict(line["end"]),
                 fold_type=line["foldType"],
+                mesh_edge=tuple(line["meshEdge"]) if line.get("meshEdge") else None,
             )
             for line in payload.get("foldLines", [])
         ],

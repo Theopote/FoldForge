@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileImage, FileText, Loader2, Package, Palette } from "lucide-react";
+import { Download, FileImage, FileText, Loader2, MousePointer2, Package, Palette } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { useStudioStore } from "@/store/studio-store";
 
 export function UnfoldPreviewPanel() {
   const {
+    projectId,
     unfoldSvgUrl,
     unfoldPdfUrl,
     unfoldZipUrl,
@@ -24,6 +25,7 @@ export function UnfoldPreviewPanel() {
     exportedColorMode,
   } = useStudioStore();
   const [previewLayer, setPreviewLayer] = useState<UnfoldPreviewLayer>("both");
+  const [seamInspector, setSeamInspector] = useState(false);
   const isProcessing = status === "processing";
   const previewIsColor = exportedColorMode === "color";
   const previewIsStale =
@@ -48,18 +50,37 @@ export function UnfoldPreviewPanel() {
           <div className="flex flex-wrap gap-2 pt-1">
             <LayerToggle
               label="Both"
-              active={previewLayer === "both"}
-              onClick={() => setPreviewLayer("both")}
+              active={previewLayer === "both" && !seamInspector}
+              onClick={() => {
+                setSeamInspector(false);
+                setPreviewLayer("both");
+              }}
             />
             <LayerToggle
               label="Baked"
-              active={previewLayer === "color"}
-              onClick={() => setPreviewLayer("color")}
+              active={previewLayer === "color" && !seamInspector}
+              onClick={() => {
+                setSeamInspector(false);
+                setPreviewLayer("color");
+              }}
             />
             <LayerToggle
               label="Lines"
-              active={previewLayer === "lines"}
-              onClick={() => setPreviewLayer("lines")}
+              active={previewLayer === "lines" && !seamInspector}
+              onClick={() => {
+                setSeamInspector(false);
+                setPreviewLayer("lines");
+              }}
+            />
+          </div>
+        )}
+        {unfoldSvgUrl && !isProcessing && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            <LayerToggle
+              label="Seams"
+              active={seamInspector}
+              onClick={() => setSeamInspector((value) => !value)}
+              icon={MousePointer2}
             />
           </div>
         )}
@@ -72,7 +93,7 @@ export function UnfoldPreviewPanel() {
       <CardContent className="flex flex-1 flex-col">
         <div
           className={
-            previewIsColor && unfoldSvgUrl && !isProcessing
+            unfoldSvgUrl && !isProcessing
               ? "relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-border bg-white"
               : "relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-[linear-gradient(45deg,#f8fafc_25%,transparent_25%),linear-gradient(-45deg,#f8fafc_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f8fafc_75%),linear-gradient(-45deg,transparent_75%,#f8fafc_75%)] bg-[length:16px_16px] bg-[position:0_0,0_8px,8px_-8px,-8px_0px]"
           }
@@ -90,21 +111,14 @@ export function UnfoldPreviewPanel() {
           )}
 
           {!isProcessing && unfoldSvgUrl ? (
-            previewIsColor ? (
-              <UnfoldSvgPreview
-                url={unfoldSvgUrl}
-                revision={exportRevision}
-                layer={previewLayer}
-                className="p-4"
-              />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={withStorageAuth(`${unfoldSvgUrl}?v=${exportRevision}`)}
-                alt="Unfold preview"
-                className="max-h-full max-w-full object-contain p-4"
-              />
-            )
+            <UnfoldSvgPreview
+              url={unfoldSvgUrl}
+              revision={exportRevision}
+              layer={seamInspector ? "lines" : previewLayer}
+              className="p-4"
+              seamInspector={seamInspector}
+              projectId={projectId}
+            />
           ) : !isProcessing ? (
             <div className="px-6 text-center">
               <FileImage className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
@@ -136,17 +150,20 @@ function LayerToggle({
   label,
   active,
   onClick,
+  icon: Icon,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
     <Badge
       variant={active ? "default" : "outline"}
-      className="cursor-pointer font-normal"
+      className="cursor-pointer gap-1 font-normal"
       onClick={onClick}
     >
+      {Icon && <Icon className="h-3 w-3" />}
       {label}
     </Badge>
   );

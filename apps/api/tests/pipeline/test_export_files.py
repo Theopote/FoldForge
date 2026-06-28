@@ -42,7 +42,11 @@ def test_export_files_from_cube_pipeline(run_pipeline_sync, fast_layout, test_en
         assert "Print settings" in instructions
         assert "50 mm scale check" in instructions
         assert "Piece inventory" in instructions
+        assert "Illustrated assembly steps" in instructions
+        assert "assembly-steps.svg" in names
         assert archive.read("instructions.pdf")[:4] == b"%PDF"
+        steps_svg = archive.read("assembly-steps.svg").decode("utf-8")
+        assert "Step 1:" in steps_svg
 
     assert result.craftability_score >= 0
     assert result.craftability_score <= 100

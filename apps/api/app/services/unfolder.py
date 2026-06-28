@@ -313,6 +313,7 @@ def _build_piece_from_vertices(
                     start=start,
                     end=end,
                     fold_type=fold_type,
+                    mesh_edge=key,
                 )
             )
         elif f1 in patch_set or f2 in patch_set:

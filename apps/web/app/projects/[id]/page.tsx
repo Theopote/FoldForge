@@ -145,6 +145,12 @@ export default function ProjectDetailPage({
                     Assembly Guide (TXT)
                   </a>
                 </Button>
+                <Button variant="outline" className="w-full justify-start" asChild>
+                  <a href={instructionUrls.stepsSvgAuth} download>
+                    <Download className="mr-2 h-4 w-4" />
+                    Assembly Steps (SVG)
+                  </a>
+                </Button>
               </>
             )}
             {project.status !== "ready" && (

@@ -23,6 +23,7 @@ from app.services.mesh_cleaner import clean_mesh, mesh_quality_issues
 from app.services.mesh_simplifier import scale_to_target_height, simplify_mesh
 from app.services.model_loader import load_mesh
 from app.services.pdf_exporter import export_pdf
+from app.services.seam_manifest import export_seam_manifest
 from app.services.seam_generator import compute_edge_dihedral_angles
 from app.services.svg_exporter import export_svg
 from app.services.outline_optimizer import optimize_pieces_cut_outlines
@@ -152,6 +153,11 @@ def run_pipeline(
 
     export_svg(pages, svg_path, project_name, settings)
     export_pdf(pages, pdf_path, project_name, settings)
+    export_seam_manifest(
+        app_settings.exports_dir / f"{project_id}.seams.json",
+        pieces,
+        dihedral,
+    )
 
     craft_score, craft_level, craft_warnings = compute_craftability(
         mesh,

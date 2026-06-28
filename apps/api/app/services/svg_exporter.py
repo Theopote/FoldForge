@@ -4,7 +4,7 @@ from pathlib import Path
 
 import svgwrite
 
-from app.models.geometry import LayoutPage, PlacedPiece
+from app.models.geometry import LayoutPage, PlacedPiece, UnfoldPiece
 from app.schemas.model import ColorMode, ProjectSettings
 from app.services.export_annotations import draw_svg_page_annotations
 
@@ -236,4 +236,78 @@ def _draw_piece(
 
     piece_group.add(baked_layer)
     piece_group.add(lines_layer)
+    if settings.add_cut_lines or settings.add_fold_lines:
+        piece_group.add(
+            _draw_seam_hit_targets(
+                drawing,
+                piece,
+                page_height_mm,
+                y_offset,
+                include_cuts=settings.add_cut_lines,
+                include_folds=settings.add_fold_lines,
+            )
+        )
     group.add(piece_group)
+
+
+def _mesh_edge_data(edge: tuple[int, int] | None) -> dict[str, str]:
+    if edge is None:
+        return {}
+    v0, v1 = edge
+    if v0 <= v1:
+        return {"data-mesh-edge": f"{v0},{v1}"}
+    return {"data-mesh-edge": f"{v1},{v0}"}
+
+
+def _draw_seam_hit_targets(
+    drawing: svgwrite.Drawing,
+    piece: UnfoldPiece,
+    page_height_mm: float,
+    y_offset: float,
+    *,
+    include_cuts: bool,
+    include_folds: bool,
+) -> svgwrite.container.Group:
+    """Invisible wide strokes for Studio seam inspector hit-testing."""
+    seams_layer = drawing.g(class_="layer-seams")
+
+    if include_cuts:
+        for cut in piece.cut_lines:
+            seams_layer.add(
+                drawing.line(
+                    start=(cut.start.x, _svg_y(page_height_mm, y_offset, cut.start.y)),
+                    end=(cut.end.x, _svg_y(page_height_mm, y_offset, cut.end.y)),
+                    stroke="transparent",
+                    stroke_width=2.5,
+                    class_="seam-edge seam-cut",
+                    **{
+                        "data-piece-id": piece.id,
+                        "data-piece-label": piece.label,
+                        "data-line-id": cut.id,
+                        "data-edge-kind": "cut",
+                        **_mesh_edge_data(cut.mesh_edge),
+                    },
+                )
+            )
+
+    if include_folds:
+        for fold in piece.fold_lines:
+            seams_layer.add(
+                drawing.line(
+                    start=(fold.start.x, _svg_y(page_height_mm, y_offset, fold.start.y)),
+                    end=(fold.end.x, _svg_y(page_height_mm, y_offset, fold.end.y)),
+                    stroke="transparent",
+                    stroke_width=2.0,
+                    class_="seam-edge seam-fold",
+                    **{
+                        "data-piece-id": piece.id,
+                        "data-piece-label": piece.label,
+                        "data-line-id": fold.id,
+                        "data-edge-kind": "fold",
+                        "data-fold-type": fold.fold_type,
+                        **_mesh_edge_data(fold.mesh_edge),
+                    },
+                )
+            )
+
+    return seams_layer

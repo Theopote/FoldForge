@@ -181,7 +181,7 @@ def test_export_instruction_files_writes_standalone_exports(
     exports_dir.mkdir()
     monkeypatch.setattr(settings, "exports_dir", exports_dir)
 
-    txt_path, pdf_path = export_instruction_files(
+    txt_path, pdf_path, svg_path = export_instruction_files(
         exports_dir,
         "demo-project",
         "Demo",
@@ -194,6 +194,8 @@ def test_export_instruction_files_writes_standalone_exports(
 
     assert txt_path.name == "demo-project.instructions.txt"
     assert pdf_path.name == "demo-project.instructions.pdf"
+    assert svg_path is not None
+    assert svg_path.name == "demo-project.assembly-steps.svg"
     assert "Piece inventory" in txt_path.read_text(encoding="utf-8")
     assert pdf_path.read_bytes()[:4] == b"%PDF"
 
@@ -235,3 +237,4 @@ def test_pipeline_zip_contains_instructions_pdf(
         instructions = archive.read("instructions.txt").decode("utf-8")
         assert "Piece inventory" in instructions
         assert "Suggested assembly order" in instructions
+        assert "assembly-steps.svg" in names

@@ -16,17 +16,20 @@ Product suggestions evaluated against current MVP scope. Items marked **Adopt** 
 
 ## Interactive SVG seam editing
 
-**Defer — killer feature, large scope.**
+**Phase A adopted — Seam Inspector (read-only).**
 
-Requires:
+Shipped:
 
-1. **Frontend:** SVG hit-testing on fold/cut lines, drag handles, undo stack.
-2. **Backend:** incremental re-unfold for edited seam graph (not full pipeline from scratch).
-3. **API:** `POST /api/projects/{id}/seams` → partial unfold + layout delta.
+1. **SVG:** `layer-seams` hit targets with `data-mesh-edge`, piece label, cut/fold kind.
+2. **Export:** `{projectId}.seams.json` with dihedral angles per mesh edge.
+3. **Studio:** Unfold preview **Seams** mode — click edges for tooltip (piece, dihedral, hidden crease).
 
-Existing pieces: `score_seams_by_overlap`, `find_best_split_seam_in_patch`, `unfold_repair` — good foundation, but no interactive loop yet.
+Next (Phase B):
 
-**Roadmap:** Phase 3 flagship; prototype as read-only seam highlight before drag-edit.
+1. Toggle seam on mesh edge → incremental re-unfold API.
+2. Undo stack + 3D view sync.
+
+Existing pieces: `score_seams_by_overlap`, `find_best_split_seam_in_patch`, `unfold_repair` — foundation for Phase B.
 
 ## Docker Compose deployment
 
