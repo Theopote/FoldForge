@@ -57,50 +57,75 @@ def unfold_with_auto_repair(
     - Strict: unresolved overlaps raise ``UnfoldRepairError`` — no export.
     - Warning: pipeline continues; ``has_unfold_overlap=True``, ``export_blocked=False``.
     """
+    data = dihedral or compute_edge_dihedral_angles(mesh)
+    seams = select_seams(mesh, difficulty, dihedral=data)
+    return unfold_with_custom_seams(
+        mesh,
+        seams,
+        difficulty,
+        dihedral=data,
+        max_iterations=max_iterations,
+        block_export_on_failure=block_export_on_failure,
+        cancel_check=cancel_check,
+    )
+
+
+def unfold_with_custom_seams(
+    mesh: trimesh.Trimesh,
+    seams: set[tuple[int, int]],
+    difficulty: Difficulty,
+    dihedral: EdgeDihedralData | None = None,
+    *,
+    max_iterations: int = MAX_UNFOLD_REPAIR_ITERATIONS,
+    block_export_on_failure: bool | None = None,
+    cancel_check: CancelCheck | None = None,
+    auto_repair: bool = True,
+) -> UnfoldRepairResult:
+    """Unfold using a caller-provided seam set, optionally running overlap repair."""
     if block_export_on_failure is None:
         block_export_on_failure = settings.block_export_on_unfold_overlap
 
     data = dihedral or compute_edge_dihedral_angles(mesh)
-    seams = select_seams(mesh, difficulty, dihedral=data)
     patches = split_into_patches(mesh, seams)
     pieces = unfold_mesh(mesh, patches, dihedral=data)
 
     messages: list[str] = []
     repair_steps = 0
 
-    for _ in range(max_iterations):
-        check_cancelled(cancel_check)
-        overlapping = [piece for piece in pieces if piece.has_overlap]
-        if not overlapping:
-            if repair_steps > 0:
-                messages.append(
-                    f"Auto-repair resolved unfold overlaps in {repair_steps} step(s)."
-                )
-            break
-
-        added_any = False
-        for piece in overlapping:
+    if auto_repair:
+        for _ in range(max_iterations):
             check_cancelled(cancel_check)
-            vertex_2d, _ = compute_unfold_vertex_map(mesh, piece.face_ids, data)
-            overlap_scores = score_seams_by_overlap(mesh, piece.face_ids, vertex_2d)
-            edge = find_best_split_seam_in_patch(
-                mesh,
-                seams,
-                piece.face_ids,
-                data,
-                overlap_edge_scores=overlap_scores,
-            )
-            if edge is not None and edge not in seams:
-                seams.add(edge)
-                added_any = True
+            overlapping = [piece for piece in pieces if piece.has_overlap]
+            if not overlapping:
+                if repair_steps > 0:
+                    messages.append(
+                        f"Auto-repair resolved unfold overlaps in {repair_steps} step(s)."
+                    )
+                break
 
-        if not added_any:
-            break
+            added_any = False
+            for piece in overlapping:
+                check_cancelled(cancel_check)
+                vertex_2d, _ = compute_unfold_vertex_map(mesh, piece.face_ids, data)
+                overlap_scores = score_seams_by_overlap(mesh, piece.face_ids, vertex_2d)
+                edge = find_best_split_seam_in_patch(
+                    mesh,
+                    seams,
+                    piece.face_ids,
+                    data,
+                    overlap_edge_scores=overlap_scores,
+                )
+                if edge is not None and edge not in seams:
+                    seams.add(edge)
+                    added_any = True
 
-        check_cancelled(cancel_check)
-        repair_steps += 1
-        patches = split_into_patches(mesh, seams)
-        pieces = unfold_mesh(mesh, patches, dihedral=data)
+            if not added_any:
+                break
+
+            check_cancelled(cancel_check)
+            repair_steps += 1
+            patches = split_into_patches(mesh, seams)
+            pieces = unfold_mesh(mesh, patches, dihedral=data)
 
     remaining = sum(1 for piece in pieces if piece.has_overlap)
     has_unfold_overlap = remaining > 0

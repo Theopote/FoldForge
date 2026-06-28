@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.schemas.job import JobStatus
@@ -21,6 +23,7 @@ class ProcessJob(BaseModel):
     settings: ProjectSettings
     project_name: str = Field(alias="projectName")
     source_path: str = Field(alias="sourcePath")
+    mode: Literal["full", "seam_reflow"] = "full"
     processed_model_url: str | None = Field(alias="processedModelUrl", default=None)
     unfold_svg_url: str | None = Field(alias="unfoldSvgUrl", default=None)
     unfold_pdf_url: str | None = Field(alias="unfoldPdfUrl", default=None)

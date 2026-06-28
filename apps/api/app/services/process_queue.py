@@ -13,6 +13,7 @@ from app.schemas.job import JobStatus
 from app.schemas.model import ProjectStatus
 from app.schemas.stats import CraftabilityScore, ProcessStats
 from app.services.papercraft_pipeline import run_pipeline
+from app.services.seam_reflow_pipeline import run_seam_reflow_pipeline
 from app.services.pipeline_errors import JobCancelledError, LayoutFitError, UnfoldRepairError
 from app.services.process_job_store import process_job_store
 from app.services.project_store import project_store
@@ -177,16 +178,21 @@ class ProcessQueue:
 
         source_path = Path(job.source_path)
         try:
-            result = await asyncio.to_thread(
-                run_pipeline,
-                project_id=job.project_id,
-                source_path=source_path,
-                project_name=job.project_name,
-                settings=job.settings,
-                source_original_path=source_path,
-                on_progress=on_progress,
-                cancel_check=cancel_check,
-            )
+            pipeline = run_seam_reflow_pipeline if job.mode == "seam_reflow" else run_pipeline
+            pipeline_kwargs = {
+                "project_id": job.project_id,
+                "project_name": job.project_name,
+                "settings": job.settings,
+                "on_progress": on_progress,
+                "cancel_check": cancel_check,
+            }
+            if job.mode == "seam_reflow":
+                pipeline_kwargs["processed_mesh_path"] = source_path
+            else:
+                pipeline_kwargs["source_path"] = source_path
+                pipeline_kwargs["source_original_path"] = source_path
+
+            result = await asyncio.to_thread(pipeline, **pipeline_kwargs)
 
             stats = ProcessStats(
                 faces=result.face_count,

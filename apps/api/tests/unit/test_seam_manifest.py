@@ -111,5 +111,6 @@ def test_export_seam_manifest_writes_json(tmp_path: Path) -> None:
     export_seam_manifest(path, [piece], dihedral)
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["version"] == 1
+    assert payload["version"] == 2
     assert "0,1" in payload["edges"]
+    assert "activeSeams" in payload

@@ -23,8 +23,9 @@ from app.services.mesh_cleaner import clean_mesh, mesh_quality_issues
 from app.services.mesh_simplifier import scale_to_target_height, simplify_mesh
 from app.services.model_loader import load_mesh
 from app.services.pdf_exporter import export_pdf
+from app.services.seam_store import load_seam_set, save_seam_set
+from app.services.seam_generator import compute_edge_dihedral_angles, select_seams
 from app.services.seam_manifest import export_seam_manifest
-from app.services.seam_generator import compute_edge_dihedral_angles
 from app.services.svg_exporter import export_svg
 from app.services.outline_optimizer import optimize_pieces_cut_outlines
 from app.services.tab_generator import add_tabs_to_pieces
@@ -80,6 +81,11 @@ def run_pipeline(
         pieces = cached_pieces
         unfold_warnings = []
         unfold_result = None
+        if load_seam_set(project_id) is None:
+            save_seam_set(
+                project_id,
+                select_seams(mesh, settings.difficulty, dihedral=dihedral),
+            )
     else:
         report(35, "Unfolding patches")
         unfold_result = unfold_with_auto_repair(
@@ -91,6 +97,7 @@ def run_pipeline(
         )
         pieces = unfold_result.pieces
         unfold_warnings = collect_unfold_warnings(pieces, unfold_result.messages)
+        save_seam_set(project_id, unfold_result.seams)
 
     need_color_rebake = False
     if used_geometry_cache and cached_pieces is not None:
@@ -157,6 +164,10 @@ def run_pipeline(
         app_settings.exports_dir / f"{project_id}.seams.json",
         pieces,
         dihedral,
+        mesh=mesh,
+        active_seams=load_seam_set(project_id)
+        or (unfold_result.seams if unfold_result is not None else select_seams(mesh, settings.difficulty, dihedral=dihedral)),
+        difficulty=settings.difficulty,
     )
 
     craft_score, craft_level, craft_warnings = compute_craftability(

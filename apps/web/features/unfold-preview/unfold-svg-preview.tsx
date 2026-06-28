@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { unfoldPreviewUrl } from "@/lib/unfold-preview-url";
 import {
   formatSeamTooltip,
@@ -9,7 +10,9 @@ import {
   parseSeamManifest,
   seamManifestPreviewUrl,
   type SeamManifest,
+  type SeamSuggestion,
 } from "@/lib/seam-manifest";
+import { useStudioStore } from "@/store/studio-store";
 
 export type UnfoldPreviewLayer = "both" | "color" | "lines";
 
@@ -38,6 +41,10 @@ const PREVIEW_LAYER_STYLES = `
   stroke: rgba(37, 99, 235, 0.75);
   stroke-width: 0.55mm;
 }
+.unfold-seam-inspector .piece-has-overlap .layer-lines polygon,
+.unfold-seam-inspector .piece-has-overlap .layer-lines line {
+  filter: drop-shadow(0 0 0.4mm rgba(234, 88, 12, 0.55));
+}
 .unfold-svg-host svg {
   display: block;
   height: auto;
@@ -53,6 +60,7 @@ type SelectedSeam = {
   edgeKind: string;
   foldType: string | null;
   tooltip: string;
+  suggestions: SeamSuggestion[];
 };
 
 export function UnfoldSvgPreview({
@@ -62,6 +70,11 @@ export function UnfoldSvgPreview({
   className = "",
   seamInspector = false,
   projectId = null,
+  onToggleSeam,
+  onUndoSeam,
+  canUndoSeam = false,
+  seamReflowPending = false,
+  seamError = null,
 }: {
   url: string;
   revision: number;
@@ -69,8 +82,16 @@ export function UnfoldSvgPreview({
   className?: string;
   seamInspector?: boolean;
   projectId?: string | null;
+  onToggleSeam?: (meshEdge: string) => void | Promise<void>;
+  onUndoSeam?: () => void | Promise<void>;
+  canUndoSeam?: boolean;
+  seamReflowPending?: boolean;
+  seamError?: string | null;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const setSelectedSeamHighlight = useStudioStore(
+    (state) => state.setSelectedSeamHighlight,
+  );
   const [markup, setMarkup] = useState<string | null>(null);
   const [manifest, setManifest] = useState<SeamManifest | null>(null);
   const [selectedSeam, setSelectedSeam] = useState<SelectedSeam | null>(null);
@@ -133,6 +154,12 @@ export function UnfoldSvgPreview({
       target.classList.add("seam-selected");
 
       const manifestEdge = manifest?.edges[meta.meshEdge];
+      const edgeHint = manifest?.advisor?.edgeHints[meta.meshEdge];
+
+      setSelectedSeamHighlight({
+        meshEdge: meta.meshEdge,
+        position3d: manifestEdge?.position3d ?? null,
+      });
 
       setSelectedSeam({
         meshEdge: meta.meshEdge,
@@ -147,10 +174,12 @@ export function UnfoldSvgPreview({
             foldType: meta.foldType,
           },
           manifestEdge,
+          edgeHint,
         ),
+        suggestions: manifest?.advisor?.suggestions ?? [],
       });
     },
-    [manifest],
+    [manifest, setSelectedSeamHighlight],
   );
 
   useEffect(() => {
@@ -209,6 +238,48 @@ export function UnfoldSvgPreview({
             <pre className="mt-1 whitespace-pre-wrap text-muted-foreground">
               {selectedSeam.tooltip}
             </pre>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                disabled={
+                  seamReflowPending ||
+                  !onToggleSeam ||
+                  manifest?.advisor?.edgeHints[selectedSeam.meshEdge]?.toggleValid ===
+                    false
+                }
+                onClick={() => void onToggleSeam?.(selectedSeam.meshEdge)}
+              >
+                {selectedSeam.edgeKind === "fold" ? "Split here" : "Merge pieces"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={seamReflowPending || !canUndoSeam || !onUndoSeam}
+                onClick={() => void onUndoSeam?.()}
+              >
+                Undo
+              </Button>
+            </div>
+            {seamError && (
+              <p className="mt-2 text-destructive">{seamError}</p>
+            )}
+            {selectedSeam.suggestions.length > 0 && (
+              <div className="mt-3 border-t border-border pt-2">
+                <p className="font-medium text-foreground">Suggested seams</p>
+                <ul className="mt-1 space-y-1 text-muted-foreground">
+                  {selectedSeam.suggestions.slice(0, 3).map((item) => (
+                    <li key={item.meshEdge}>
+                      {item.label} ({item.meshEdge})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {manifest?.advisor?.overlapPieces.length ? (
+              <p className="mt-2 text-amber-700">
+                Overlapping pieces: {manifest.advisor.overlapPieces.join(", ")}
+              </p>
+            ) : null}
           </div>
         )}
         {seamInspector && !selectedSeam && (

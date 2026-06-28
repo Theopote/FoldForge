@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { Center, OrbitControls } from "@react-three/drei";
+import { Center, Line, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -10,21 +10,30 @@ import {
   normalizeModelObject,
   type ModelMeshStats,
 } from "@/lib/geometry-stats";
+import type { SeamPosition3d } from "@/lib/seam-manifest";
 import { loadModelFromUrl } from "@/lib/model-loader";
+
+type NormalizeTransform = {
+  center: THREE.Vector3;
+  scale: number;
+};
 
 type SceneModelProps = {
   url: string;
   onLoaded: (stats: ModelMeshStats) => void;
   onError: (message: string) => void;
+  onTransformReady: (transform: NormalizeTransform) => void;
 };
 
-function SceneModel({ url, onLoaded, onError }: SceneModelProps) {
+function SceneModel({ url, onLoaded, onError, onTransformReady }: SceneModelProps) {
   const [object, setObject] = useState<THREE.Object3D | null>(null);
   const onLoadedRef = useRef(onLoaded);
   const onErrorRef = useRef(onError);
+  const onTransformReadyRef = useRef(onTransformReady);
 
   onLoadedRef.current = onLoaded;
   onErrorRef.current = onError;
+  onTransformReadyRef.current = onTransformReady;
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +57,15 @@ function SceneModel({ url, onLoaded, onError }: SceneModelProps) {
           }
         });
 
+        const box = new THREE.Box3().setFromObject(loaded);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = maxDim > 0 ? 2 / maxDim : 1;
+
         normalizeModelObject(loaded);
+        onTransformReadyRef.current({ center, scale });
+
         const stats = computeModelMeshStats(loaded);
         setObject(loaded);
         onLoadedRef.current(stats);
@@ -75,17 +92,44 @@ function SceneModel({ url, onLoaded, onError }: SceneModelProps) {
   );
 }
 
+function SeamEdgeHighlight({
+  position3d,
+  transform,
+}: {
+  position3d: SeamPosition3d;
+  transform: NormalizeTransform;
+}) {
+  const points = [position3d.a, position3d.b].map(
+    ([x, y, z]) =>
+      [
+        (x - transform.center.x) * transform.scale,
+        (y - transform.center.y) * transform.scale,
+        (z - transform.center.z) * transform.scale,
+      ] as [number, number, number],
+  );
+
+  return <Line points={points} color="#e85d4c" lineWidth={3} />;
+}
+
 type ModelViewerCanvasProps = {
   url: string;
   onLoaded: (stats: ModelMeshStats) => void;
   onError: (message: string) => void;
+  seamHighlight?: SeamPosition3d | null;
 };
 
 export function ModelViewerCanvas({
   url,
   onLoaded,
   onError,
+  seamHighlight = null,
 }: ModelViewerCanvasProps) {
+  const [transform, setTransform] = useState<NormalizeTransform | null>(null);
+
+  useEffect(() => {
+    setTransform(null);
+  }, [url]);
+
   return (
     <Canvas
       shadows
@@ -103,7 +147,15 @@ export function ModelViewerCanvas({
       />
       <directionalLight position={[-3, 2, -2]} intensity={0.35} />
       <Suspense fallback={null}>
-        <SceneModel url={url} onLoaded={onLoaded} onError={onError} />
+        <SceneModel
+          url={url}
+          onLoaded={onLoaded}
+          onError={onError}
+          onTransformReady={setTransform}
+        />
+        {seamHighlight && transform && (
+          <SeamEdgeHighlight position3d={seamHighlight} transform={transform} />
+        )}
       </Suspense>
       <OrbitControls
         makeDefault

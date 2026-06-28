@@ -12,23 +12,29 @@ import { useStudioStore } from "@/store/studio-store";
 export function ModelPreviewPanel() {
   const {
     sourceFileUrl,
+    processedModelUrl,
     sourceType,
     aiProvider,
     status,
     meshStats,
     stats,
     craftability,
+    selectedSeamMeshEdge,
+    selectedSeamHighlight,
     setMeshStats,
     addLog,
     setError,
   } = useStudioStore();
   const [isLoadingModel, setIsLoadingModel] = useState(false);
 
+  const previewUrl =
+    status === "ready" && processedModelUrl ? processedModelUrl : sourceFileUrl;
+
   useEffect(() => {
-    if (sourceFileUrl) {
+    if (previewUrl) {
       setIsLoadingModel(true);
     }
-  }, [sourceFileUrl]);
+  }, [previewUrl]);
 
   const handleLoaded = useCallback(
     (loadedStats: ModelMeshStats) => {
@@ -66,6 +72,11 @@ export function ModelPreviewPanel() {
               AI: {aiProvider}
             </Badge>
           )}
+          {selectedSeamMeshEdge && (
+            <Badge variant="secondary" className="text-xs">
+              Seam {selectedSeamMeshEdge}
+            </Badge>
+          )}
           <Badge variant="outline" className="text-xs">
             Craftability: {craftability ? `${craftability.score}` : "—"}
           </Badge>
@@ -74,7 +85,7 @@ export function ModelPreviewPanel() {
       </CardHeader>
       <CardContent className="flex flex-1 flex-col">
         <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-sky-50/80 via-white to-orange-50/80">
-          {sourceFileUrl ? (
+          {previewUrl ? (
             <>
               {isLoadingModel && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
@@ -82,9 +93,10 @@ export function ModelPreviewPanel() {
                 </div>
               )}
               <ModelViewer
-                url={sourceFileUrl}
+                url={previewUrl}
                 onLoaded={handleLoaded}
                 onError={handleError}
+                seamHighlight={selectedSeamHighlight}
               />
             </>
           ) : (

@@ -16,20 +16,24 @@ Product suggestions evaluated against current MVP scope. Items marked **Adopt** 
 
 ## Interactive SVG seam editing
 
-**Phase A adopted — Seam Inspector (read-only).**
+**Phase A + B + C adopted.**
 
 Shipped:
 
-1. **SVG:** `layer-seams` hit targets with `data-mesh-edge`, piece label, cut/fold kind.
-2. **Export:** `{projectId}.seams.json` with dihedral angles per mesh edge.
-3. **Studio:** Unfold preview **Seams** mode — click edges for tooltip (piece, dihedral, hidden crease).
+1. **SVG:** `layer-seams` hit targets with seam metadata in element `id`.
+2. **Export:** `{projectId}.seams.json` manifest v2 + `{projectId}.seamset.json` authoritative seam set.
+3. **Studio:** Seams mode — inspect, **Split here / Merge pieces**, undo, incremental re-unfold.
+4. **API:** `PATCH /api/projects/{id}/seams` → async seam reflow job; `GET` returns advisor + 3D positions.
+5. **3D sync:** selected seam edge highlighted on processed GLB; overlap pieces glow in SVG.
+6. **Advisor:** toggle preview hints, overlap list, ranked seam suggestions.
 
-Next (Phase B):
+Next (Phase D):
 
-1. Toggle seam on mesh edge → incremental re-unfold API.
-2. Undo stack + 3D view sync.
+1. Click-to-select edges directly in 3D view.
+2. Live overlap heatmap overlay per face.
+3. AI-assisted seam recommendations.
 
-Existing pieces: `score_seams_by_overlap`, `find_best_split_seam_in_patch`, `unfold_repair` — foundation for Phase B.
+Existing pieces: `unfold_with_custom_seams`, `run_seam_reflow_pipeline`, `apply_seam_toggle`.
 
 ## Docker Compose deployment
 

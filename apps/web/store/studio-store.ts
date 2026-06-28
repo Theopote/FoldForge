@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { ModelMeshStats } from "@/lib/geometry-stats";
+import type { SeamPosition3d } from "@/lib/seam-manifest";
 import { cancelAllJobPolls } from "@/lib/job-poll-session";
 import type { StudioProjectSnapshot } from "@/lib/project-storage";
 import { persistLastProjectId } from "@/lib/project-storage";
@@ -64,6 +65,8 @@ type StudioState = {
   jobPhase: "idle" | "ai_generation" | "papercraft_process";
   jobProgress: number;
   jobMessage: string;
+  selectedSeamMeshEdge: string | null;
+  selectedSeamHighlight: SeamPosition3d | null;
   setSourceType: (sourceType: SourceType) => void;
   setUploadResult: (payload: {
     projectId: string;
@@ -104,6 +107,10 @@ type StudioState = {
     message: string;
   }) => void;
   clearJobProgress: () => void;
+  setSelectedSeamHighlight: (payload: {
+    meshEdge: string | null;
+    position3d: SeamPosition3d | null;
+  }) => void;
   reset: () => void;
 };
 
@@ -135,6 +142,8 @@ const initialState = {
   jobPhase: "idle" as const,
   jobProgress: 0,
   jobMessage: "",
+  selectedSeamMeshEdge: null,
+  selectedSeamHighlight: null,
 };
 
 function applyGenerationReset() {
@@ -286,5 +295,7 @@ export const useStudioStore = create<StudioState>((set) => ({
     set({ jobPhase: phase, jobProgress: progress, jobMessage: message }),
   clearJobProgress: () =>
     set({ jobPhase: "idle", jobProgress: 0, jobMessage: "" }),
+  setSelectedSeamHighlight: ({ meshEdge, position3d }) =>
+    set({ selectedSeamMeshEdge: meshEdge, selectedSeamHighlight: position3d }),
   reset: () => set(initialState),
 }));

@@ -16,6 +16,12 @@ from app.services.process_job_response import build_process_job_response
 from app.services.process_job_store import process_job_store
 from app.services.process_queue import process_queue
 from app.services.project_store import project_store
+from app.config import settings as app_settings
+from app.schemas.seams import UpdateProjectSeamsRequest, UpdateProjectSeamsResponse
+from app.services.model_loader import load_mesh
+from app.services.seam_editor import apply_seam_toggle, validate_seam_set
+from app.services.seam_generator import compute_edge_dihedral_angles, select_seams
+from app.services.seam_store import format_seam_list, load_seam_set, parse_mesh_edge, save_seam_set
 from app.utils.file_utils import generate_project_id, resolve_storage_path
 from app.utils.logging_utils import get_logger
 
@@ -119,6 +125,114 @@ async def update_project_settings(
     project.settings = settings
     project_store.update(project)
     return project.model_dump(by_alias=True)
+
+
+@router.get("/projects/{project_id}/seams")
+async def get_project_seams(project_id: str) -> dict:
+    """Return seam manifest JSON for Studio (includes advisor and 3D edge positions)."""
+    project = project_store.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    manifest_path = app_settings.exports_dir / f"{project_id}.seams.json"
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="Seam manifest not found.")
+
+    import json
+
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+@router.patch("/projects/{project_id}/seams", response_model=UpdateProjectSeamsResponse)
+async def update_project_seams(
+    project_id: str,
+    body: UpdateProjectSeamsRequest,
+) -> JSONResponse:
+    """
+    Toggle or replace seam edges and queue an incremental re-unfold job.
+
+    Uses the processed mesh GLB — does not re-run clean/simplify.
+    """
+    project = project_store.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    if project.status != ProjectStatus.READY:
+        raise HTTPException(
+            status_code=400,
+            detail="Project must be ready before editing seams.",
+        )
+
+    if not project.processed_model_url:
+        raise HTTPException(status_code=400, detail="Processed mesh not available.")
+
+    processed_path = resolve_storage_path(project.processed_model_url)
+    if not processed_path.exists():
+        raise HTTPException(status_code=404, detail="Processed mesh file not found.")
+
+    existing = process_job_store.get_by_project(project_id)
+    if existing and existing.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+        raise HTTPException(
+            status_code=409,
+            detail="A process job is already running for this project.",
+        )
+
+    mesh = load_mesh(processed_path)
+    dihedral = compute_edge_dihedral_angles(mesh)
+    seams = load_seam_set(project_id)
+    if seams is None:
+        seams = select_seams(mesh, project.settings.difficulty, dihedral=dihedral)
+        save_seam_set(project_id, seams)
+
+    action = "toggle"
+    if body.seams is not None:
+        action = "replace"
+        candidate = {parse_mesh_edge(item) for item in body.seams}
+        error = validate_seam_set(mesh, candidate, project.settings.difficulty)
+        if error is not None:
+            raise HTTPException(status_code=400, detail=error)
+        new_seams = candidate
+    elif body.toggle is not None:
+        new_seams, error = apply_seam_toggle(
+            mesh,
+            seams,
+            parse_mesh_edge(body.toggle.mesh_edge),
+            project.settings.difficulty,
+        )
+        if error is not None:
+            raise HTTPException(status_code=400, detail=error)
+    else:
+        raise HTTPException(status_code=400, detail="Provide toggle or seams.")
+
+    save_seam_set(project_id, new_seams)
+
+    now = datetime.now(timezone.utc)
+    job_id = generate_project_id()
+    job = ProcessJob(
+        id=job_id,
+        projectId=project_id,
+        settings=project.settings,
+        projectName=project.name,
+        sourcePath=str(processed_path.resolve()),
+        mode="seam_reflow",
+        createdAt=now,
+        updatedAt=now,
+    )
+    process_job_store.create(job)
+
+    project.status = ProjectStatus.PROCESSING
+    project_store.update(project)
+
+    await process_queue.enqueue(job_id)
+    logger.info("Queued seam reflow job %s for project %s", job_id, project_id)
+
+    response = UpdateProjectSeamsResponse(
+        projectId=project_id,
+        jobId=job_id,
+        seams=format_seam_list(new_seams),
+        action=action,
+    )
+    return JSONResponse(status_code=202, content=response.model_dump(by_alias=True))
 
 
 @router.get(

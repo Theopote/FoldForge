@@ -96,7 +96,10 @@ def _draw_piece(
     settings: ProjectSettings,
 ) -> None:
     piece = placed.piece
-    piece_group = drawing.g(id=piece.id)
+    piece_group_kwargs: dict[str, str] = {"id": piece.id}
+    if piece.has_overlap:
+        piece_group_kwargs["class_"] = "piece-has-overlap"
+    piece_group = drawing.g(**piece_group_kwargs)
     baked_layer = drawing.g(class_="layer-baked")
     lines_layer = drawing.g(class_="layer-lines")
 

@@ -11,6 +11,7 @@ import {
   UnfoldSvgPreview,
   type UnfoldPreviewLayer,
 } from "@/features/unfold-preview/unfold-svg-preview";
+import { useSeamReflow } from "@/features/unfold-preview/use-seam-reflow";
 import { useStudioStore } from "@/store/studio-store";
 
 export function UnfoldPreviewPanel() {
@@ -26,7 +27,9 @@ export function UnfoldPreviewPanel() {
   } = useStudioStore();
   const [previewLayer, setPreviewLayer] = useState<UnfoldPreviewLayer>("both");
   const [seamInspector, setSeamInspector] = useState(false);
-  const isProcessing = status === "processing";
+  const { toggleSeam, undoSeam, canUndo, pending: seamPending, seamError } =
+    useSeamReflow(projectId);
+  const isProcessing = status === "processing" || seamPending;
   const previewIsColor = exportedColorMode === "color";
   const previewIsStale =
     status === "ready" &&
@@ -101,11 +104,15 @@ export function UnfoldPreviewPanel() {
           {isProcessing && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white/80 backdrop-blur-sm">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <p className="text-sm font-medium">Generating unfold template…</p>
+              <p className="text-sm font-medium">
+                {seamPending ? "Re-unfolding after seam edit…" : "Generating unfold template…"}
+              </p>
               <p className="text-xs text-muted-foreground">
-                {settings.colorMode === "color"
-                  ? "Cleaning mesh · unfolding · baking colors · layout · export"
-                  : "Cleaning mesh · unfolding · layout · export"}
+                {seamPending
+                  ? "Updating patches · tabs · layout · export"
+                  : settings.colorMode === "color"
+                    ? "Cleaning mesh · unfolding · baking colors · layout · export"
+                    : "Cleaning mesh · unfolding · layout · export"}
               </p>
             </div>
           )}
@@ -118,6 +125,11 @@ export function UnfoldPreviewPanel() {
               className="p-4"
               seamInspector={seamInspector}
               projectId={projectId}
+              onToggleSeam={toggleSeam}
+              onUndoSeam={undoSeam}
+              canUndoSeam={canUndo}
+              seamReflowPending={seamPending}
+              seamError={seamError}
             />
           ) : !isProcessing ? (
             <div className="px-6 text-center">

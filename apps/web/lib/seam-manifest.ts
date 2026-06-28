@@ -2,6 +2,11 @@ import { withStorageAuth } from "@/lib/api-auth";
 
 export type SeamEdgeKind = "cut" | "fold";
 
+export type SeamPosition3d = {
+  a: [number, number, number];
+  b: [number, number, number];
+};
+
 export type SeamEdgeInfo = {
   kind: SeamEdgeKind;
   pieceId: string;
@@ -11,19 +16,46 @@ export type SeamEdgeInfo = {
   dihedralDeg: number;
   signedDihedralDeg: number;
   hiddenCrease: boolean;
+  inSeamSet?: boolean;
+  hasOverlap?: boolean;
+  position3d?: SeamPosition3d;
+};
+
+export type SeamEdgeHint = {
+  toggleValid: boolean;
+  error?: string;
+  overlapPiecesAfter?: number;
+  pieceCountAfter?: number;
+};
+
+export type SeamSuggestion = {
+  meshEdge: string;
+  action: "add" | "remove";
+  score: number;
+  label: string;
+};
+
+export type SeamAdvisor = {
+  overlapPieces: string[];
+  suggestions: SeamSuggestion[];
+  edgeHints: Record<string, SeamEdgeHint>;
 };
 
 export type SeamManifest = {
   version: number;
   edgeCount: number;
+  activeSeams: string[];
   edges: Record<string, SeamEdgeInfo>;
+  advisor: SeamAdvisor | null;
 };
 
 export function seamManifestUrls(projectId: string) {
   const json = `/storage/exports/${projectId}.seams.json`;
+  const api = `/api/projects/${projectId}/seams`;
   return {
     json,
     jsonAuth: withStorageAuth(json),
+    api,
   };
 }
 
@@ -31,6 +63,22 @@ export function seamManifestPreviewUrl(projectId: string, revision: number): str
   const { jsonAuth } = seamManifestUrls(projectId);
   const separator = jsonAuth.includes("?") ? "&" : "?";
   return `${jsonAuth}${separator}v=${revision}`;
+}
+
+function parsePosition3d(raw: unknown): SeamPosition3d | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const value = raw as Record<string, unknown>;
+  const a = value.a;
+  const b = value.b;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== 3 || b.length !== 3) {
+    return undefined;
+  }
+  return {
+    a: [Number(a[0]), Number(a[1]), Number(a[2])],
+    b: [Number(b[0]), Number(b[1]), Number(b[2])],
+  };
 }
 
 export function parseSeamManifest(raw: unknown): SeamManifest | null {
@@ -64,13 +112,67 @@ export function parseSeamManifest(raw: unknown): SeamManifest | null {
       dihedralDeg: Number(edge.dihedralDeg ?? 0),
       signedDihedralDeg: Number(edge.signedDihedralDeg ?? 0),
       hiddenCrease: Boolean(edge.hiddenCrease),
+      inSeamSet: Boolean(edge.inSeamSet),
+      hasOverlap: Boolean(edge.hasOverlap),
+      position3d: parsePosition3d(edge.position3d),
+    };
+  }
+
+  let advisor: SeamAdvisor | null = null;
+  if (payload.advisor && typeof payload.advisor === "object") {
+    const rawAdvisor = payload.advisor as Record<string, unknown>;
+    const suggestions = Array.isArray(rawAdvisor.suggestions)
+      ? rawAdvisor.suggestions
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const s = item as Record<string, unknown>;
+            return {
+              meshEdge: String(s.meshEdge ?? ""),
+              action: s.action === "remove" ? "remove" : "add",
+              score: Number(s.score ?? 0),
+              label: String(s.label ?? ""),
+            } satisfies SeamSuggestion;
+          })
+          .filter((item): item is SeamSuggestion => item !== null && item.meshEdge.length > 0)
+      : [];
+    const edgeHints: Record<string, SeamEdgeHint> = {};
+    if (rawAdvisor.edgeHints && typeof rawAdvisor.edgeHints === "object") {
+      for (const [key, value] of Object.entries(
+        rawAdvisor.edgeHints as Record<string, unknown>,
+      )) {
+        if (!value || typeof value !== "object") continue;
+        const hint = value as Record<string, unknown>;
+        edgeHints[key] = {
+          toggleValid: Boolean(hint.toggleValid),
+          error: hint.error ? String(hint.error) : undefined,
+          overlapPiecesAfter:
+            hint.overlapPiecesAfter !== undefined
+              ? Number(hint.overlapPiecesAfter)
+              : undefined,
+          pieceCountAfter:
+            hint.pieceCountAfter !== undefined
+              ? Number(hint.pieceCountAfter)
+              : undefined,
+        };
+      }
+    }
+    advisor = {
+      overlapPieces: Array.isArray(rawAdvisor.overlapPieces)
+        ? rawAdvisor.overlapPieces.map(String)
+        : [],
+      suggestions,
+      edgeHints,
     };
   }
 
   return {
     version: Number(payload.version ?? 0),
     edgeCount: Number(payload.edgeCount ?? Object.keys(edges).length),
+    activeSeams: Array.isArray(payload.activeSeams)
+      ? payload.activeSeams.map(String)
+      : [],
     edges,
+    advisor,
   };
 }
 
@@ -176,6 +278,7 @@ export function formatSeamTooltip(
     foldType?: string | null;
   },
   manifestEdge?: SeamEdgeInfo,
+  edgeHint?: SeamEdgeHint,
 ): string {
   const kind = attrs.edgeKind === "fold" ? "Fold" : "Cut seam";
   const piece = attrs.pieceLabel ? `Piece ${attrs.pieceLabel}` : "Piece";
@@ -189,10 +292,27 @@ export function formatSeamTooltip(
     if (manifestEdge.hiddenCrease) {
       lines.push("Hidden crease (concave)");
     }
+    if (manifestEdge.hasOverlap) {
+      lines.push("This piece has unfold overlap");
+    }
   } else if (attrs.foldType) {
     lines.push(`${attrs.foldType} fold`);
   }
 
-  lines.push("Seam editing coming soon — inspect only");
+  if (edgeHint) {
+    if (!edgeHint.toggleValid && edgeHint.error) {
+      lines.push(`Cannot toggle: ${edgeHint.error}`);
+    } else if (edgeHint.toggleValid && edgeHint.overlapPiecesAfter !== undefined) {
+      lines.push(
+        `After toggle: ${edgeHint.overlapPiecesAfter} overlapping piece(s), ${edgeHint.pieceCountAfter ?? "?"} total`,
+      );
+    }
+  }
+
+  lines.push(
+    attrs.edgeKind === "fold"
+      ? "Click “Split here” to cut along this edge."
+      : "Click “Merge pieces” to remove this cut seam.",
+  );
   return lines.join("\n");
 }

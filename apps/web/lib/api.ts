@@ -150,6 +150,74 @@ export async function patchProjectSettings(
   return response.json() as Promise<ProjectDetailResponse>;
 }
 
+export type UpdateProjectSeamsPayload =
+  | { toggle: { meshEdge: string } }
+  | { seams: string[] };
+
+export type UpdateProjectSeamsResponse = {
+  projectId: string;
+  jobId: string;
+  seams: string[];
+  action: "toggle" | "replace";
+  async?: boolean;
+};
+
+/** Toggle or replace seam edges and queue incremental re-unfold. */
+export async function patchProjectSeams(
+  projectId: string,
+  payload: UpdateProjectSeamsPayload,
+): Promise<UpdateProjectSeamsResponse> {
+  const response = await fetch(`/api/projects/${projectId}/seams`, {
+    method: "PATCH",
+    headers: apiAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+
+  if (response.status === 404) {
+    throw new ProjectNotFoundError(projectId);
+  }
+
+  const body = (await response.json().catch(() => ({}))) as UpdateProjectSeamsResponse &
+    ApiErrorBody;
+
+  if (response.status !== 202 && !response.ok) {
+    throw new Error(parseApiError(body, "Failed to update seams."));
+  }
+
+  return body;
+}
+
+/** Patch seams and poll until the re-unfold job completes. */
+export async function reflowProjectSeams(
+  projectId: string,
+  payload: UpdateProjectSeamsPayload,
+  options?: {
+    onProgress?: (job: ProcessJobResponse) => void;
+    signal?: AbortSignal;
+  },
+): Promise<ProcessModelResponse> {
+  const accepted = await patchProjectSeams(projectId, payload);
+  const job = await pollProcessJob(accepted.jobId, {
+    onProgress: options?.onProgress,
+    signal: options?.signal,
+  });
+
+  return {
+    projectId: job.projectId,
+    status: job.resultStatus ?? "ready",
+    processedModelUrl: job.processedModelUrl,
+    unfoldSvgUrl: job.unfoldSvgUrl,
+    unfoldPdfUrl: job.unfoldPdfUrl,
+    unfoldZipUrl: job.unfoldZipUrl,
+    stats: job.stats,
+    craftability: job.craftability,
+    jobId: job.jobId,
+    async: true,
+    progress: job.progress,
+    message: job.message,
+  };
+}
+
 /**
  * Fetch the latest AI generation job for a project (resume without localStorage jobId).
  */
