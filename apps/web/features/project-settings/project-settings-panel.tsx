@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { processModel } from "@/lib/api";
-import { saveStudioProject } from "@/lib/project-storage";
 import { useStudioStore } from "@/store/studio-store";
 import type { CraftabilityScore } from "@/types";
 
@@ -25,14 +24,6 @@ export function ProjectSettingsPanel() {
     settings,
     updateSettings,
     projectId,
-    projectName,
-    sourceType,
-    sourceFileName,
-    sourceFileUrl,
-    sourcePrompt,
-    sourceImageUrl,
-    aiProvider,
-    enhancedPrompt,
     status,
     setStatus,
     setResults,
@@ -76,26 +67,6 @@ export function ProjectSettingsPanel() {
           addLog(`Note: ${warning}`);
         }
       }
-
-      saveStudioProject({
-        projectId: projectId!,
-        projectName,
-        sourceType,
-        sourceFileName,
-        sourceFileUrl,
-        sourcePrompt,
-        sourceImageUrl,
-        aiProvider,
-        enhancedPrompt,
-        processedModelUrl: data.processedModelUrl ?? null,
-        unfoldSvgUrl: data.unfoldSvgUrl ?? null,
-        unfoldPdfUrl: data.unfoldPdfUrl ?? null,
-        unfoldZipUrl: data.unfoldZipUrl ?? null,
-        status: data.status as typeof status,
-        settings,
-        stats: data.stats ?? null,
-        craftability: (data.craftability as CraftabilityScore) ?? null,
-      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Generation failed.";

@@ -3,6 +3,10 @@ import { create } from "zustand";
 import type { ModelMeshStats } from "@/lib/geometry-stats";
 import type { SavedStudioProject } from "@/lib/project-storage";
 import {
+  persistStudioProject,
+  studioStateToSavedProject,
+} from "@/lib/project-storage";
+import {
   DEFAULT_PROJECT_SETTINGS,
   type CraftabilityScore,
   type ProcessStats,
@@ -22,6 +26,16 @@ type GenerationPayload = {
   enhancedPrompt?: string | null;
 };
 
+type AsyncGenerationPayload = {
+  projectId: string;
+  projectName: string;
+  jobId: string;
+  sourceType: SourceType;
+  sourcePrompt?: string | null;
+  sourceImageUrl?: string | null;
+  aiProvider?: string | null;
+};
+
 type StudioState = {
   projectId: string | null;
   projectName: string;
@@ -32,6 +46,7 @@ type StudioState = {
   sourceImageUrl: string | null;
   aiProvider: string | null;
   enhancedPrompt: string | null;
+  activeJobId: string | null;
   processedModelUrl: string | null;
   unfoldSvgUrl: string | null;
   unfoldPdfUrl: string | null;
@@ -50,6 +65,8 @@ type StudioState = {
     fileName: string;
   }) => void;
   setGenerationResult: (payload: GenerationPayload) => void;
+  setAsyncGenerationPending: (payload: AsyncGenerationPayload) => void;
+  setActiveJobId: (jobId: string | null) => void;
   setStatus: (status: ProjectStatus) => void;
   updateSettings: (partial: Partial<ProjectSettings>) => void;
   setMeshStats: (stats: ModelMeshStats | null) => void;
@@ -77,6 +94,7 @@ const initialState = {
   sourceImageUrl: null,
   aiProvider: null,
   enhancedPrompt: null,
+  activeJobId: null,
   processedModelUrl: null,
   unfoldSvgUrl: null,
   unfoldPdfUrl: null,
@@ -103,42 +121,138 @@ function applyGenerationReset() {
   };
 }
 
+function persistState(state: StudioState): void {
+  persistStudioProject(studioStateToSavedProject(state));
+}
+
 export const useStudioStore = create<StudioState>((set) => ({
   ...initialState,
   setSourceType: (sourceType) => set({ sourceType }),
   setUploadResult: ({ projectId, sourceFileUrl, fileName }) =>
-    set({
-      projectId,
-      sourceFileUrl,
-      sourceFileName: fileName,
-      projectName: fileName.replace(/\.[^.]+$/, ""),
-      sourceType: "upload_3d",
-      sourcePrompt: null,
-      sourceImageUrl: null,
-      aiProvider: null,
-      enhancedPrompt: null,
-      status: "uploaded",
-      ...applyGenerationReset(),
+    set((state) => {
+      const next: StudioState = {
+        ...state,
+        projectId,
+        sourceFileUrl,
+        sourceFileName: fileName,
+        projectName: fileName.replace(/\.[^.]+$/, ""),
+        sourceType: "upload_3d",
+        sourcePrompt: null,
+        sourceImageUrl: null,
+        aiProvider: null,
+        enhancedPrompt: null,
+        activeJobId: null,
+        status: "uploaded",
+        ...applyGenerationReset(),
+      };
+      persistState(next);
+      return {
+        projectId,
+        sourceFileUrl,
+        sourceFileName: fileName,
+        projectName: fileName.replace(/\.[^.]+$/, ""),
+        sourceType: "upload_3d" as SourceType,
+        sourcePrompt: null,
+        sourceImageUrl: null,
+        aiProvider: null,
+        enhancedPrompt: null,
+        activeJobId: null,
+        status: "uploaded" as ProjectStatus,
+        ...applyGenerationReset(),
+      };
     }),
   setGenerationResult: (payload) =>
-    set({
-      projectId: payload.projectId,
-      sourceFileUrl: payload.sourceFileUrl,
-      sourceFileName: payload.fileName,
-      projectName: payload.fileName.replace(/\.[^.]+$/, ""),
-      sourceType: payload.sourceType,
-      sourcePrompt: payload.sourcePrompt ?? null,
-      sourceImageUrl: payload.sourceImageUrl ?? null,
-      aiProvider: payload.aiProvider ?? null,
-      enhancedPrompt: payload.enhancedPrompt ?? null,
-      status: "uploaded",
-      ...applyGenerationReset(),
+    set((state) => {
+      const next: StudioState = {
+        ...state,
+        projectId: payload.projectId,
+        sourceFileUrl: payload.sourceFileUrl,
+        sourceFileName: payload.fileName,
+        projectName: payload.fileName.replace(/\.[^.]+$/, ""),
+        sourceType: payload.sourceType,
+        sourcePrompt: payload.sourcePrompt ?? null,
+        sourceImageUrl: payload.sourceImageUrl ?? null,
+        aiProvider: payload.aiProvider ?? null,
+        enhancedPrompt: payload.enhancedPrompt ?? null,
+        activeJobId: null,
+        status: "uploaded",
+        ...applyGenerationReset(),
+      };
+      persistState(next);
+      return {
+        projectId: payload.projectId,
+        sourceFileUrl: payload.sourceFileUrl,
+        sourceFileName: payload.fileName,
+        projectName: payload.fileName.replace(/\.[^.]+$/, ""),
+        sourceType: payload.sourceType,
+        sourcePrompt: payload.sourcePrompt ?? null,
+        sourceImageUrl: payload.sourceImageUrl ?? null,
+        aiProvider: payload.aiProvider ?? null,
+        enhancedPrompt: payload.enhancedPrompt ?? null,
+        activeJobId: null,
+        status: "uploaded" as ProjectStatus,
+        ...applyGenerationReset(),
+      };
     }),
-  setStatus: (status) => set({ status }),
+  setAsyncGenerationPending: (payload) =>
+    set((state) => {
+      const next: StudioState = {
+        ...state,
+        projectId: payload.projectId,
+        projectName: payload.projectName,
+        sourceType: payload.sourceType,
+        sourcePrompt: payload.sourcePrompt ?? null,
+        sourceImageUrl: payload.sourceImageUrl ?? null,
+        aiProvider: payload.aiProvider ?? null,
+        enhancedPrompt: null,
+        activeJobId: payload.jobId,
+        sourceFileUrl: null,
+        sourceFileName: null,
+        status: "processing",
+        ...applyGenerationReset(),
+      };
+      persistState(next);
+      return {
+        projectId: payload.projectId,
+        projectName: payload.projectName,
+        sourceType: payload.sourceType,
+        sourcePrompt: payload.sourcePrompt ?? null,
+        sourceImageUrl: payload.sourceImageUrl ?? null,
+        aiProvider: payload.aiProvider ?? null,
+        enhancedPrompt: null,
+        activeJobId: payload.jobId,
+        sourceFileUrl: null,
+        sourceFileName: null,
+        status: "processing" as ProjectStatus,
+        ...applyGenerationReset(),
+      };
+    }),
+  setActiveJobId: (activeJobId) =>
+    set((state) => {
+      const next: StudioState = { ...state, activeJobId };
+      persistState(next);
+      return { activeJobId };
+    }),
+  setStatus: (status) =>
+    set((state) => {
+      const next: StudioState = { ...state, status };
+      persistState(next);
+      return { status };
+    }),
   updateSettings: (partial) =>
-    set((state) => ({ settings: { ...state.settings, ...partial } })),
+    set((state) => {
+      const settings = { ...state.settings, ...partial };
+      const next: StudioState = { ...state, settings };
+      persistState(next);
+      return { settings };
+    }),
   setMeshStats: (meshStats) => set({ meshStats }),
-  setResults: (payload) => set((state) => ({ ...state, ...payload })),
+  setResults: (payload) =>
+    set((state) => {
+      const next: StudioState = { ...state, ...payload };
+      persistState(next);
+      return payload;
+    }),
   restoreProject: (saved) =>
     set({
       projectId: saved.projectId,
@@ -150,6 +264,7 @@ export const useStudioStore = create<StudioState>((set) => ({
       sourceImageUrl: saved.sourceImageUrl ?? null,
       aiProvider: saved.aiProvider ?? null,
       enhancedPrompt: saved.enhancedPrompt ?? null,
+      activeJobId: saved.activeJobId ?? null,
       processedModelUrl: saved.processedModelUrl,
       unfoldSvgUrl: saved.unfoldSvgUrl,
       unfoldPdfUrl: saved.unfoldPdfUrl,

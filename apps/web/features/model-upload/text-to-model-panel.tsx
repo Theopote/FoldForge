@@ -32,7 +32,8 @@ export function TextToModelPanel() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
-  const { setGenerationResult, addLog, setError } = useStudioStore();
+  const { setGenerationResult, setAsyncGenerationPending, addLog, setError } =
+    useStudioStore();
 
   const handleGenerate = async () => {
     if (prompt.trim().length < 3) {
@@ -54,6 +55,14 @@ export function TextToModelPanel() {
       let enhancedPrompt = data.enhancedPrompt;
 
       if (data.async && data.jobId) {
+        setAsyncGenerationPending({
+          projectId: data.projectId,
+          projectName: data.sourcePrompt?.slice(0, 32) ?? "ai-model",
+          jobId: data.jobId,
+          sourceType: "text_to_3d",
+          sourcePrompt: data.sourcePrompt,
+          aiProvider: data.aiProvider,
+        });
         addLog(`Queued (${aiProvider}). Job: ${data.jobId}`);
         const job = await pollGenerationJob(data.jobId, {
           onProgress: (update) => {

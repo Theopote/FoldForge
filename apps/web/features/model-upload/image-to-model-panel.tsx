@@ -31,7 +31,8 @@ export function ImageToModelPanel() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
-  const { setGenerationResult, addLog, setError } = useStudioStore();
+  const { setGenerationResult, setAsyncGenerationPending, addLog, setError } =
+    useStudioStore();
 
   const handleFile = useCallback((file: File | null) => {
     if (!file) return;
@@ -64,6 +65,15 @@ export function ImageToModelPanel() {
       let enhancedPrompt = data.enhancedPrompt;
 
       if (data.async && data.jobId) {
+        setAsyncGenerationPending({
+          projectId: data.projectId,
+          projectName: selectedFile.name.replace(/\.[^.]+$/, ""),
+          jobId: data.jobId,
+          sourceType: "image_to_3d",
+          sourcePrompt: data.sourcePrompt,
+          sourceImageUrl: data.sourceImageUrl,
+          aiProvider: data.aiProvider,
+        });
         addLog(`Queued (${aiProvider}). Job: ${data.jobId}`);
         const job = await pollGenerationJob(data.jobId, {
           onProgress: (update) => {
