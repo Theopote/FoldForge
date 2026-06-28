@@ -9,7 +9,11 @@
     "dev:api": "cd apps/api && python -m uvicorn app.main:app --reload --reload-dir app --reload-delay 0.4 --host 0.0.0.0 --port 8000",
     "build:web": "npm run build --prefix apps/web",
     "lint:web": "npm run lint --prefix apps/web",
-    "install:web": "npm install --prefix apps/web"
+    "install:web": "npm install --prefix apps/web",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "cd apps/api && python -m pytest",
+    "test:api:e2e": "cd apps/api && python -m pytest tests/integration -m e2e",
+    "test:web": "npm run test --prefix apps/web"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

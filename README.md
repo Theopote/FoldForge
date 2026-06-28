@@ -120,6 +120,41 @@ Open:
 - **Backend:** FastAPI, Pydantic, Trimesh (Step 5+)
 - **Storage:** Local filesystem (`storage/`)
 
+## Testing
+
+From the repo root (API venv activated):
+
+```bash
+# Install API test dependencies once
+pip install -r apps/api/requirements-dev.txt
+
+# Generate mesh fixtures (committed in CI; run locally after clone)
+python apps/api/tests/fixtures/generate_fixtures.py
+
+# All tests: backend pytest + frontend production build
+npm run test
+
+# Backend only
+npm run test:api
+
+# API upload → process e2e (slower)
+npm run test:api:e2e
+```
+
+Backend tests live under `apps/api/tests/`:
+
+- **Unit** — geometry algorithms, upload validation, model loading
+- **Pipeline snapshots** — `cube.stl`, `low_poly_bunny.obj`, `simple_house.glb`, `thin_parts_model.obj`
+- **Export** — SVG/PDF/ZIP structure and page sizing
+- **Integration** — upload + async process job via FastAPI
+
+Refresh pipeline snapshots after intentional geometry changes:
+
+```bash
+cd apps/api
+UPDATE_SNAPSHOTS=1 python -m pytest tests/pipeline/test_pipeline_snapshots.py
+```
+
 ## License
 
 Private — MVP development.
