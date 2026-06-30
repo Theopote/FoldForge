@@ -1,4 +1,4 @@
-"""Shared geometry helpers (placeholder for advanced algorithms)."""
+"""Shared geometry helpers used by the papercraft pipeline."""
 
 from typing import Sequence
 

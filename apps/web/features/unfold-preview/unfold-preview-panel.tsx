@@ -106,7 +106,7 @@ export function UnfoldPreviewPanel() {
         )}
         {previewIsStale && (
           <p className="text-xs text-amber-700">
-            Color mode changed — regenerate the template to refresh the preview.
+            Color mode changed - regenerate the template to refresh the preview.
           </p>
         )}
       </CardHeader>
@@ -122,14 +122,14 @@ export function UnfoldPreviewPanel() {
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white/80 backdrop-blur-sm">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
               <p className="text-sm font-medium">
-                {seamPending ? "Re-unfolding after seam edit…" : "Generating unfold template…"}
+                {seamPending ? "Re-unfolding after seam edit..." : "Generating unfold template..."}
               </p>
               <p className="text-xs text-muted-foreground">
                 {seamPending
-                  ? "Updating patches · tabs · layout · export"
+                  ? "Updating patches - tabs - layout - export"
                   : settings.colorMode === "color"
-                    ? "Cleaning mesh · unfolding · baking colors · layout · export"
-                    : "Cleaning mesh · unfolding · layout · export"}
+                    ? "Cleaning mesh - unfolding - baking colors - layout - export"
+                    : "Cleaning mesh - unfolding - layout - export"}
               </p>
             </div>
           )}
@@ -156,7 +156,7 @@ export function UnfoldPreviewPanel() {
               </p>
               {settings.colorMode === "color" && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Color mode is on — surface colors will appear after generation.
+                  Color mode is on - surface colors will appear after generation.
                 </p>
               )}
             </div>

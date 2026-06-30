@@ -1,6 +1,6 @@
 # Texture Baking Spike
 
-Status: **prototype** — validates the color pipeline end-to-end in SVG and PDF export.
+Status: **implemented prototype** - validates the color pipeline end-to-end in SVG and PDF export.
 
 ## Goal
 
@@ -10,10 +10,10 @@ Map source mesh surface appearance onto unfolded 2D triangles so `colorMode=colo
 
 ```text
 3D mesh face
-  → sample RGB (vertex colors → texture UV → normal tint fallback)
-  → map face corners through unfold vertex map (same as cut/fold geometry)
-  → BakedTriangle(a, b, c, fill="#rrggbb")
-  → SVG / PDF polygon under cut/fold layers
+  -> sample RGB (vertex colors -> texture UV -> normal tint fallback)
+  -> map face corners through unfold vertex map (same as cut/fold geometry)
+  -> BakedTriangle(a, b, c, fill="#rrggbb")
+  -> SVG / PDF polygon under cut/fold layers
 ```
 
 Implementation: `app/services/texture_baker.py`
@@ -22,9 +22,9 @@ Implementation: `app/services/texture_baker.py`
 
 | Source | Status |
 |--------|--------|
-| Vertex colors | ✅ Primary path |
-| GLB/GLTF texture + UV | ✅ Basic PIL sampling at vertex UV |
-| No color data | ✅ Normal-direction gray tint (placeholder) |
+| Vertex colors | Primary path |
+| GLB/GLTF texture + UV | Basic PIL sampling at vertex UV |
+| No color data | Normal-direction gray tint fallback |
 
 ## Not in spike
 
@@ -57,8 +57,8 @@ Progress message: `"Baking surface colors"`.
 
 ## Next steps
 
-1. **Raster mode** — optional high-res bake for photo textures (`512px` short edge)
-2. **Quality** — barycentric UV sampling + mip-aware filtering for large faces
+1. **Raster mode** - optional high-res bake for photo textures (`512px` short edge)
+2. **Quality** - barycentric UV sampling + mip-aware filtering for large faces
 
 **Material cache:** `storage/cache/{project_id}.material.json` stores unfold geometry, baked triangles, and per-face fill colors. When source + geometry settings are unchanged, the pipeline skips unfold/tabs and re-runs layout + export only (e.g. paper size change). Face-color cache avoids re-sampling mesh textures on color rebake.
 

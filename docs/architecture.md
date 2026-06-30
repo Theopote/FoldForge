@@ -47,4 +47,4 @@ Served at `/storage/*` via FastAPI `StaticFiles`.
 
 ## Extensibility
 
-Geometry services (`unfolder.py`, `seam_generator.py`, etc.) are stubbed with clear module boundaries so advanced algorithms can swap in without changing API contracts.
+Geometry services (`unfolder.py`, `seam_generator.py`, etc.) provide the current papercraft pipeline behind clear module boundaries, so stronger algorithms can swap in without changing API contracts.

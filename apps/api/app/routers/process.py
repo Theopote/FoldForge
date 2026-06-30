@@ -34,7 +34,7 @@ async def process_model(request: ProcessModelRequest):
     """
     Queue papercraft pipeline processing for a project.
 
-    Returns 202 Accepted with jobId — poll GET /api/process-jobs/{jobId}
+    Returns 202 Accepted with jobId; poll GET /api/process-jobs/{jobId}
     or GET /api/jobs/{jobId} for progress and results.
     """
     project = project_store.get(request.project_id)
@@ -151,7 +151,7 @@ async def update_project_seams(
     """
     Toggle or replace seam edges and queue an incremental re-unfold job.
 
-    Uses the processed mesh GLB — does not re-run clean/simplify.
+    Uses the processed mesh GLB; does not re-run clean/simplify.
     """
     project = project_store.get(project_id)
     if project is None:

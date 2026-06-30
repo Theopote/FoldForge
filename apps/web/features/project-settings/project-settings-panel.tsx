@@ -157,9 +157,9 @@ export function ProjectSettingsPanel() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="A4">A4 (210 × 297 mm)</SelectItem>
-              <SelectItem value="A3">A3 (297 × 420 mm)</SelectItem>
-              <SelectItem value="Letter">Letter (8.5 × 11 in)</SelectItem>
+              <SelectItem value="A4">A4 (210 x 297 mm)</SelectItem>
+              <SelectItem value="A3">A3 (297 x 420 mm)</SelectItem>
+              <SelectItem value="Letter">Letter (8.5 x 11 in)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -178,9 +178,9 @@ export function ProjectSettingsPanel() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="easy">Easy — fewer pieces, beginner friendly</SelectItem>
-              <SelectItem value="standard">Standard — balanced detail</SelectItem>
-              <SelectItem value="advanced">Advanced — more detail & pieces</SelectItem>
+              <SelectItem value="easy">Easy - fewer pieces, beginner friendly</SelectItem>
+              <SelectItem value="standard">Standard - balanced detail</SelectItem>
+              <SelectItem value="advanced">Advanced - more detail & pieces</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -268,7 +268,7 @@ export function ProjectSettingsPanel() {
           disabled={!projectId || status === "processing"}
           onClick={() => void handleGenerate()}
         >
-          {status === "processing" ? "Generating template…" : "Generate Template"}
+          {status === "processing" ? "Generating template..." : "Generate Template"}
         </Button>
 
         {status === "processing" && activeProcessJobId && (

@@ -266,8 +266,8 @@ export function UnfoldSvgPreview({
         {seamInspector && selectedSeam && (
           <div className="absolute bottom-3 left-3 right-3 rounded-xl border border-border bg-background/95 p-3 text-xs shadow-sm backdrop-blur-sm">
             <p className="font-medium text-foreground">
-              {selectedSeam.edgeKind === "fold" ? "Fold line" : "Cut seam"} · Piece{" "}
-              {selectedSeam.pieceLabel || "—"}
+              {selectedSeam.edgeKind === "fold" ? "Fold line" : "Cut seam"} - Piece{" "}
+              {selectedSeam.pieceLabel || "-"}
             </p>
             <pre className="mt-1 whitespace-pre-wrap text-muted-foreground">
               {selectedSeam.tooltip}

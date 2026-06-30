@@ -129,7 +129,7 @@ export function ModelPreviewPanel() {
               {seamInspectorMode && (
                 <p className="absolute left-3 right-3 top-3 z-10 rounded-lg border border-border/70 bg-background/90 px-3 py-1.5 text-center text-[11px] text-muted-foreground backdrop-blur-sm">
                   {hasHeatmap && showOverlapHeatmap
-                    ? "Orange faces show unfold overlap intensity · click an edge to inspect"
+                    ? "Orange faces show unfold overlap intensity - click an edge to inspect"
                     : "Click a seam edge in 3D or the 2D unfold to inspect and edit"}
                 </p>
               )}
