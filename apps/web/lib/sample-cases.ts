@@ -9,6 +9,13 @@ export type SampleCase = {
   color: string;
   samplePath?: string;
   sampleFileName?: string;
+  unfoldSvgPath?: string;
+  stats?: {
+    faces: number;
+    pieces: number;
+    pages: number;
+    difficultyScore: number;
+  };
   prompt?: string;
 };
 
@@ -24,6 +31,8 @@ export const SAMPLE_CASES: SampleCase[] = [
     color: "from-emerald-100 via-white to-teal-100",
     samplePath: "/samples/box.stl",
     sampleFileName: "box.stl",
+    unfoldSvgPath: "/samples/box-unfold.svg",
+    stats: { faces: 12, pieces: 6, pages: 1, difficultyScore: 12 },
     prompt: "A simple low poly gift box with broad faces for beginner papercraft",
   },
   {
@@ -37,6 +46,8 @@ export const SAMPLE_CASES: SampleCase[] = [
     color: "from-amber-100 via-white to-orange-100",
     samplePath: "/samples/pyramid.stl",
     sampleFileName: "pyramid.stl",
+    unfoldSvgPath: "/samples/pyramid-unfold.svg",
+    stats: { faces: 6, pieces: 5, pages: 1, difficultyScore: 10 },
     prompt: "A simple geometric pyramid table marker for printable papercraft",
   },
   {

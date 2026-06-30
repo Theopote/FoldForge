@@ -69,6 +69,17 @@ export function ModelUploadPanel() {
     setLocalSamplePreview({
       sourceFileUrl: sample.samplePath,
       fileName: sample.sampleFileName,
+      unfoldSvgUrl: sample.unfoldSvgPath ?? null,
+      stats: sample.stats ?? null,
+      craftability: sample.unfoldSvgPath
+        ? {
+            score: sample.difficulty === "Easy" ? 92 : 82,
+            level: sample.difficulty === "Easy" ? "excellent" : "good",
+            warnings: [
+              "Offline sample preview. Start the API server and regenerate for production exports.",
+            ],
+          }
+        : null,
     });
     addLog(`Loading sample model (${sample.sampleFileName})...`);
 

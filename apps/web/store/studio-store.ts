@@ -73,6 +73,9 @@ type StudioState = {
   setLocalSamplePreview: (payload: {
     sourceFileUrl: string;
     fileName: string;
+    unfoldSvgUrl?: string | null;
+    stats?: ProcessStats | null;
+    craftability?: CraftabilityScore | null;
   }) => void;
   setUploadResult: (payload: {
     projectId: string;
@@ -178,9 +181,16 @@ function touchProjectSession(projectId: string): void {
 export const useStudioStore = create<StudioState>((set) => ({
   ...initialState,
   setSourceType: (sourceType) => set({ sourceType }),
-  setLocalSamplePreview: ({ sourceFileUrl, fileName }) =>
+  setLocalSamplePreview: ({
+    sourceFileUrl,
+    fileName,
+    unfoldSvgUrl = null,
+    stats = null,
+    craftability = null,
+  }) =>
     set(() => {
       cancelAllJobPolls();
+      const hasOfflineUnfold = Boolean(unfoldSvgUrl);
       return {
         projectId: null,
         sourceFileUrl,
@@ -193,8 +203,13 @@ export const useStudioStore = create<StudioState>((set) => ({
         enhancedPrompt: null,
         activeJobId: null,
         activeProcessJobId: null,
-        status: "uploaded" as ProjectStatus,
+        status: hasOfflineUnfold ? "ready" as ProjectStatus : "uploaded" as ProjectStatus,
         ...applyGenerationReset(),
+        unfoldSvgUrl,
+        exportRevision: hasOfflineUnfold ? 1 : 0,
+        exportedColorMode: hasOfflineUnfold ? "line_art" as ColorMode : null,
+        stats,
+        craftability,
       };
     }),
   setUploadResult: ({ projectId, sourceFileUrl, fileName }) =>
