@@ -1,4 +1,4 @@
-"""Provider registry — select AI backend from configuration."""
+"""Provider registry - select AI backend from configuration."""
 
 from app.config import settings
 from app.services.ai.base import ModelGeneratorProvider
@@ -20,7 +20,7 @@ def _instantiate(name: str) -> ModelGeneratorProvider:
     return cls()
 
 
-def resolve_provider_name() -> str:
+def resolve_provider_name(modality: str = "any") -> str:
     """
     Resolve configured provider name.
 
@@ -30,27 +30,36 @@ def resolve_provider_name() -> str:
     if configured != "auto":
         return configured
 
-    for candidate in ("meshy", "triposr", "replicate"):
+    if modality == "text":
+        candidates = ("meshy", "replicate")
+    elif modality == "image":
+        candidates = ("meshy", "triposr", "replicate")
+    else:
+        candidates = ("meshy", "triposr", "replicate")
+
+    for candidate in candidates:
         provider = _instantiate(candidate)
-        if provider.is_available:
+        configured, text, image, _reason = _provider_capabilities(candidate)
+        supports_modality = (
+            modality == "any"
+            or (modality == "text" and text)
+            or (modality == "image" and image)
+        )
+        if provider.is_available and configured and supports_modality:
             return candidate
     return "mock"
 
 
-def get_model_provider() -> ModelGeneratorProvider:
+def get_model_provider(modality: str = "any") -> ModelGeneratorProvider:
     """Return the configured model generation provider instance."""
-    name = resolve_provider_name()
+    name = resolve_provider_name(modality)
     provider = _instantiate(name)
-    if name != "mock" and not provider.is_available:
-        return MockModelProvider()
     return provider
 
 
 def get_provider_by_name(name: str) -> ModelGeneratorProvider:
     """Return a provider instance by explicit name."""
     provider = _instantiate(name)
-    if name != "mock" and not provider.is_available:
-        return MockModelProvider()
     return provider
 
 
@@ -69,11 +78,16 @@ def list_providers() -> list[dict[str, str | bool]]:
 
     for name in ("mock", "meshy", "triposr", "replicate"):
         provider = _instantiate(name)
+        configured, text, image, reason = _provider_capabilities(name)
         items.append(
             {
                 "name": name,
                 "active": active.name == name or (active_name == name),
                 "available": provider.is_available if name != "mock" else True,
+                "configured": configured,
+                "text": text,
+                "image": image,
+                "reason": reason or "",
                 "async": should_use_async_queue(provider),
             }
         )
@@ -83,7 +97,57 @@ def list_providers() -> list[dict[str, str | bool]]:
             "name": "auto",
             "active": settings.ai_provider.lower() == "auto",
             "available": True,
+            "configured": True,
+            "text": True,
+            "image": True,
+            "reason": f"Resolved to {active.name}",
             "async": should_use_async_queue(active),
         }
     )
     return items
+
+
+def _provider_capabilities(name: str) -> tuple[bool, bool, bool, str | None]:
+    if name == "mock":
+        return True, True, True, "Offline procedural fallback"
+    if name == "meshy":
+        configured = bool(settings.meshy_api_key)
+        return (
+            configured,
+            configured,
+            configured,
+            None if configured else "Set MESHY_API_KEY",
+        )
+    if name == "triposr":
+        configured = bool(
+            settings.replicate_api_token and settings.triposr_replicate_version
+        )
+        missing = []
+        if not settings.replicate_api_token:
+            missing.append("REPLICATE_API_TOKEN")
+        if not settings.triposr_replicate_version:
+            missing.append("TRIPOSR_REPLICATE_VERSION")
+        return (
+            configured,
+            False,
+            configured,
+            None if configured else f"Set {', '.join(missing)}",
+        )
+    if name == "replicate":
+        has_token = bool(settings.replicate_api_token)
+        text = bool(has_token and settings.replicate_text_model)
+        image = bool(has_token and settings.replicate_image_model)
+        missing = []
+        if not has_token:
+            missing.append("REPLICATE_API_TOKEN")
+        if has_token and not settings.replicate_text_model:
+            missing.append("REPLICATE_TEXT_MODEL")
+        if has_token and not settings.replicate_image_model:
+            missing.append("REPLICATE_IMAGE_MODEL")
+        return (
+            text or image,
+            text,
+            image,
+            None if text or image else f"Set {', '.join(missing)}",
+        )
+    return False, False, False, "Unknown provider"

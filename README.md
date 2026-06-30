@@ -62,7 +62,22 @@ pip install -r requirements.txt
 
 ```bash
 cp apps/web/.env.local.example apps/web/.env.local
+cp apps/api/.env.example apps/api/.env
 ```
+
+For real AI generation, edit `apps/api/.env` and set one production provider:
+
+```env
+AI_PROVIDER=auto
+MESHY_API_KEY=your_meshy_key
+# or:
+REPLICATE_API_TOKEN=your_replicate_token
+REPLICATE_TEXT_MODEL=replicate_version_hash
+REPLICATE_IMAGE_MODEL=replicate_version_hash
+```
+
+If no production provider is configured, FoldForge uses the offline `mock`
+provider for demos. The Studio Text/Image panels show the active AI backend.
 
 ### 3. Run development servers
 

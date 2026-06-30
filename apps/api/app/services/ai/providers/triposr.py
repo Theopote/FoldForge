@@ -1,4 +1,4 @@
-"""TripoSR provider via Replicate — fast image-to-3D for papercraft."""
+"""TripoSR provider via Replicate - fast image-to-3D for papercraft."""
 
 from __future__ import annotations
 
@@ -10,12 +10,11 @@ from app.config import settings
 from app.schemas.model import Style
 from app.services.ai.base import GenerationResult, ModelGeneratorProvider
 from app.services.ai.http_utils import download_file, image_to_data_uri
-from app.services.ai.procedural import generate_procedural_mesh
-from app.services.ai.prompt_builder import enhance_image_hint, enhance_text_prompt
+from app.services.ai.prompt_builder import enhance_image_hint
 
 
 class TripoSRProvider(ModelGeneratorProvider):
-    """TripoSR on Replicate — image-to-3D; text uses procedural fallback."""
+    """TripoSR on Replicate - image-to-3D only."""
 
     name = "triposr"
 
@@ -35,18 +34,9 @@ class TripoSRProvider(ModelGeneratorProvider):
         *,
         on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
-        """TripoSR is image-only; use procedural fallback for text prompts."""
-        enhanced = enhance_text_prompt(prompt, style)
-        if on_progress:
-            on_progress(10, "TripoSR is image-only — using procedural fallback")
-        mesh = generate_procedural_mesh(enhanced, style)
-        mesh.export(output_path)
-        if on_progress:
-            on_progress(100, "Complete")
-        return GenerationResult(
-            model_path=output_path,
-            provider=f"{self.name}+procedural",
-            enhanced_prompt=enhanced,
+        """Reject text prompts because TripoSR is image-only."""
+        raise RuntimeError(
+            "TripoSR supports image-to-3D only. Configure Meshy or Replicate text generation."
         )
 
     async def generate_from_image(

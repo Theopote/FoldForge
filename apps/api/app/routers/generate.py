@@ -50,7 +50,8 @@ async def generate_from_text(request: GenerateFromTextRequest):
     Production providers (Meshy, TripoSR, Replicate) return 202 + jobId for polling.
     Mock runs synchronously unless AI_ASYNC_FOR_MOCK=true.
     """
-    provider = get_model_provider()
+    provider = get_model_provider("text")
+    _ensure_provider_can_run(provider, "text")
     project_id = generate_project_id()
     output_path = settings.uploads_dir / f"{project_id}.glb"
     name = request.name or _name_from_prompt(request.prompt)
@@ -65,11 +66,14 @@ async def generate_from_text(request: GenerateFromTextRequest):
             provider_name=provider.name,
         )
 
-    result = await provider.generate_from_text(
-        prompt=request.prompt,
-        style=request.style,
-        output_path=output_path,
-    )
+    try:
+        result = await provider.generate_from_text(
+            prompt=request.prompt,
+            style=request.style,
+            output_path=output_path,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if not result.model_path.exists():
         raise HTTPException(status_code=500, detail="Model generation failed.")
@@ -134,7 +138,8 @@ async def generate_from_image(
     async with aiofiles.open(image_path, "wb") as output:
         await output.write(content)
 
-    provider = get_model_provider()
+    provider = get_model_provider("image")
+    _ensure_provider_can_run(provider, "image")
     project_name = name or Path(file.filename).stem
     image_url = build_storage_url(Path("uploads") / image_path.name)
 
@@ -150,12 +155,15 @@ async def generate_from_image(
             provider_name=provider.name,
         )
 
-    result = await provider.generate_from_image(
-        image_path=image_path,
-        style=style,
-        output_path=output_path,
-        hint=hint,
-    )
+    try:
+        result = await provider.generate_from_image(
+            image_path=image_path,
+            style=style,
+            output_path=output_path,
+            hint=hint,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if not result.model_path.exists():
         raise HTTPException(status_code=500, detail="Model generation failed.")
@@ -307,3 +315,35 @@ def _validate_image_content(content: bytes) -> None:
             status_code=400,
             detail="Image content does not match a supported image format.",
         ) from exc
+
+
+def _ensure_provider_can_run(provider, modality: str) -> None:
+    if provider.name == "mock":
+        return
+    if provider.name == "triposr" and modality == "text":
+        raise HTTPException(
+            status_code=400,
+            detail="TripoSR supports image-to-3D only. Configure Meshy or REPLICATE_TEXT_MODEL for text-to-3D.",
+        )
+    if provider.name == "replicate":
+        missing = None
+        if not settings.replicate_api_token:
+            missing = "REPLICATE_API_TOKEN"
+        elif modality == "text" and not settings.replicate_text_model:
+            missing = "REPLICATE_TEXT_MODEL"
+        elif modality == "image" and not settings.replicate_image_model:
+            missing = "REPLICATE_IMAGE_MODEL"
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Replicate {modality}-to-3D requires {missing}.",
+            )
+    if provider.is_available:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"AI provider '{provider.name}' is not configured for {modality}-to-3D. "
+            "Check /api/ai/providers and apps/api/.env."
+        ),
+    )

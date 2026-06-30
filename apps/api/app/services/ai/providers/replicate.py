@@ -21,7 +21,7 @@ class ReplicateModelProvider(ModelGeneratorProvider):
     """
     Replicate-hosted models when API token is configured.
 
-    Falls back to mock provider if the API call fails.
+    Provider fallback is opt-in; production AI failures should be visible.
     """
 
     name = "replicate"
@@ -31,7 +31,10 @@ class ReplicateModelProvider(ModelGeneratorProvider):
 
     @property
     def is_available(self) -> bool:
-        return bool(settings.replicate_api_token)
+        return bool(
+            settings.replicate_api_token
+            and (settings.replicate_text_model or settings.replicate_image_model)
+        )
 
     @property
     def requires_async(self) -> bool:
@@ -46,8 +49,15 @@ class ReplicateModelProvider(ModelGeneratorProvider):
         on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         enhanced = enhance_text_prompt(prompt, style)
-        if not self.is_available:
-            return await self._fallback.generate_from_text(prompt, style, output_path)
+        if not settings.replicate_api_token or not settings.replicate_text_model:
+            if settings.ai_allow_provider_fallback:
+                return await self._fallback.generate_from_text(prompt, style, output_path)
+            missing = (
+                "REPLICATE_TEXT_MODEL"
+                if settings.replicate_api_token
+                else "REPLICATE_API_TOKEN"
+            )
+            raise RuntimeError(f"Replicate text generation requires {missing}.")
 
         try:
             await self._download_replicate_output(
@@ -61,7 +71,9 @@ class ReplicateModelProvider(ModelGeneratorProvider):
                 enhanced_prompt=enhanced,
             )
         except Exception as exc:
-            logger.warning("Replicate text failed: %s — using mock", exc)
+            if not settings.ai_allow_provider_fallback:
+                raise RuntimeError(f"Replicate text generation failed: {exc}") from exc
+            logger.warning("Replicate text failed: %s; using mock fallback", exc)
             return await self._fallback.generate_from_text(prompt, style, output_path)
 
     async def generate_from_image(
@@ -74,10 +86,17 @@ class ReplicateModelProvider(ModelGeneratorProvider):
         on_progress: Callable[[int, str], None] | None = None,
     ) -> GenerationResult:
         enhanced = enhance_image_hint(hint, style)
-        if not self.is_available:
-            return await self._fallback.generate_from_image(
-                image_path, style, output_path, hint
+        if not settings.replicate_api_token or not settings.replicate_image_model:
+            if settings.ai_allow_provider_fallback:
+                return await self._fallback.generate_from_image(
+                    image_path, style, output_path, hint
+                )
+            missing = (
+                "REPLICATE_IMAGE_MODEL"
+                if settings.replicate_api_token
+                else "REPLICATE_API_TOKEN"
             )
+            raise RuntimeError(f"Replicate image generation requires {missing}.")
 
         try:
             image_b64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
@@ -94,7 +113,9 @@ class ReplicateModelProvider(ModelGeneratorProvider):
                 preview_image_path=image_path,
             )
         except Exception as exc:
-            logger.warning("Replicate image failed: %s — using mock", exc)
+            if not settings.ai_allow_provider_fallback:
+                raise RuntimeError(f"Replicate image generation failed: {exc}") from exc
+            logger.warning("Replicate image failed: %s; using mock fallback", exc)
             return await self._fallback.generate_from_image(
                 image_path, style, output_path, hint
             )

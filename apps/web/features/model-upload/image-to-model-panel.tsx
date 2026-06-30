@@ -20,6 +20,7 @@ import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { AiProviderStatus } from "@/features/model-upload/ai-provider-status";
 import { isAbortError } from "@/lib/poll-utils";
 import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
@@ -128,6 +129,8 @@ export function ImageToModelPanel() {
 
   return (
     <div className="space-y-4">
+      <AiProviderStatus mode="image" />
+
       <div
         role="button"
         tabIndex={0}
@@ -164,7 +167,7 @@ export function ImageToModelPanel() {
             <ImageIcon className="mb-2 h-8 w-8 text-primary" />
             <p className="text-sm font-medium">Drop photo or sketch here</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              JPG · PNG · WebP · Silhouettes work best
+              JPG - PNG - WebP - silhouettes work best
             </p>
           </>
         )}
@@ -211,7 +214,7 @@ export function ImageToModelPanel() {
       {showAiProgress && jobProgress > 0 && (
         <div className="space-y-1 rounded-xl border bg-muted/40 px-3 py-2">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{jobMessage || "Generating…"}</span>
+            <span>{jobMessage || "Generating..."}</span>
             <span>{jobProgress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">

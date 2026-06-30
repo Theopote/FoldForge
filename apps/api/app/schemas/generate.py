@@ -36,6 +36,10 @@ class AiProviderInfo(BaseModel):
     name: str
     active: bool
     available: bool
+    configured: bool = True
+    text: bool = True
+    image: bool = True
+    reason: str | None = None
     async_mode: bool = Field(alias="async", default=False)
 
     model_config = {"populate_by_name": True}

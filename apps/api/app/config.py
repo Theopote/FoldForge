@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     # AI generation (Phase 2+)
     ai_provider: str = "auto"  # auto | mock | meshy | triposr | replicate
     ai_async_for_mock: bool = False
+    ai_allow_provider_fallback: bool = False
     replicate_api_token: str | None = None
     replicate_text_model: str = ""
     replicate_image_model: str = ""

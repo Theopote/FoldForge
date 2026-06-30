@@ -21,6 +21,7 @@ import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { AiProviderStatus } from "@/features/model-upload/ai-provider-status";
 import { TEXT_PROMPT_CASES } from "@/lib/sample-cases";
 import { isAbortError } from "@/lib/poll-utils";
 import { useStudioStore } from "@/store/studio-store";
@@ -138,6 +139,8 @@ export function TextToModelPanel() {
         </p>
       </div>
 
+      <AiProviderStatus mode="text" />
+
       <div className="space-y-2">
         <Label htmlFor="text-prompt">Prompt</Label>
         <textarea
@@ -183,7 +186,7 @@ export function TextToModelPanel() {
       {showAiProgress && jobProgress > 0 && (
         <div className="space-y-1 rounded-xl border bg-muted/40 px-3 py-2">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{jobMessage || "Generating…"}</span>
+            <span>{jobMessage || "Generating..."}</span>
             <span>{jobProgress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -204,8 +207,8 @@ export function TextToModelPanel() {
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {showAiProgress && jobProgress > 0
-              ? `Generating 3D… ${jobProgress}%`
-              : "Generating 3D…"}
+              ? `Generating 3D... ${jobProgress}%`
+              : "Generating 3D..."}
           </>
         ) : (
           <>

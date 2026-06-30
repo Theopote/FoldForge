@@ -49,6 +49,17 @@ export type GenerateModelResponse = {
   message?: string;
 };
 
+export type AiProviderInfo = {
+  name: string;
+  active: boolean;
+  available: boolean;
+  configured: boolean;
+  text: boolean;
+  image: boolean;
+  reason?: string | null;
+  async: boolean;
+};
+
 export type ApiErrorBody = {
   detail?: string | Array<{ msg?: string; type?: string }>;
 };
@@ -125,6 +136,20 @@ export async function getProject(projectId: string): Promise<ProjectDetailRespon
   }
 
   return response.json() as Promise<ProjectDetailResponse>;
+}
+
+/** List configured AI providers and active backend status. */
+export async function getAiProviders(): Promise<AiProviderInfo[]> {
+  const response = await fetch("/api/ai/providers", {
+    headers: apiAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new Error(parseApiError(body, "Failed to load AI provider status."));
+  }
+
+  return response.json() as Promise<AiProviderInfo[]>;
 }
 
 /** Persist Studio papercraft settings to the backend (debounced in UI). */

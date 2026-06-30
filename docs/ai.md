@@ -1,8 +1,10 @@
-# FoldForge AI Generation (Phase 2+)
+# FoldForge AI Generation
 
 ## Overview
 
-Phase 2 adds **Text-to-3D** and **Image-to-3D** inputs before the existing papercraft pipeline. Production providers run in an **async job queue** with frontend polling.
+FoldForge supports text-to-3D and image-to-3D before the papercraft pipeline.
+Production providers run through an async job queue and the Studio frontend polls
+for progress.
 
 ```mermaid
 flowchart LR
@@ -19,41 +21,49 @@ flowchart LR
 
 | Provider | Config | Text | Image | Async |
 |----------|--------|------|-------|-------|
-| `auto` (default) | picks best available | ✓ | ✓ | when production |
-| `mock` | none | ✓ | ✓ | optional |
-| `meshy` | `MESHY_API_KEY` | ✓ | ✓ | ✓ |
-| `triposr` | `REPLICATE_API_TOKEN` + `TRIPOSR_REPLICATE_VERSION` | procedural fallback | ✓ | ✓ |
-| `replicate` | `REPLICATE_API_TOKEN` | ✓ | ✓ | ✓ |
+| `auto` | picks best available | yes | yes | when production |
+| `mock` | none | yes | yes | optional |
+| `meshy` | `MESHY_API_KEY` | yes | yes | yes |
+| `triposr` | `REPLICATE_API_TOKEN` + `TRIPOSR_REPLICATE_VERSION` | no | yes | yes |
+| `replicate` | `REPLICATE_API_TOKEN` + model versions | yes | yes | yes |
 
-Set in `apps/api/.env`:
+Copy `apps/api/.env.example` to `apps/api/.env` and set the provider keys:
 
 ```env
 AI_PROVIDER=auto
+AI_ALLOW_PROVIDER_FALLBACK=false
 MESHY_API_KEY=
 REPLICATE_API_TOKEN=
+REPLICATE_TEXT_MODEL=
+REPLICATE_IMAGE_MODEL=
 TRIPOSR_REPLICATE_VERSION=
 ```
 
-### Auto selection order
+`auto` selection order:
 
-1. **Meshy** — if `MESHY_API_KEY` is set (text + image, low-poly preview mode)
-2. **TripoSR** — if Replicate token + TripoSR version (image; text uses procedural fallback)
-3. **Replicate** — if token set (generic models)
-4. **Mock** — offline procedural / heightmap
+1. Meshy, if `MESHY_API_KEY` is set.
+2. TripoSR, if `REPLICATE_API_TOKEN` and `TRIPOSR_REPLICATE_VERSION` are set.
+3. Replicate, if token and at least one model version are set.
+4. Mock, as an offline procedural fallback.
 
-## Async generation queue
+Production provider failures are visible by default. Set
+`AI_ALLOW_PROVIDER_FALLBACK=true` only when you intentionally want Replicate
+failures to fall back to the offline mock provider during demos.
 
-Production providers return **HTTP 202** with a `jobId`. Poll until `status` is `completed` or `failed`.
+## Async Generation Queue
+
+Production providers return `202 Accepted` with a `jobId`. Poll until `status`
+is `completed` or `failed`.
 
 ```http
 POST /api/generate-from-text
-→ 202 { projectId, jobId, async: true, status: "processing" }
+-> 202 { projectId, jobId, async: true, status: "processing" }
 
 GET /api/generation-jobs/{jobId}
-→ { status, progress, message, sourceFileUrl? }
+-> { status, progress, message, sourceFileUrl? }
 ```
 
-Job statuses: `queued` → `running` → `completed` | `failed`
+Job statuses: `queued` -> `running` -> `completed` | `failed`.
 
 The worker starts automatically via FastAPI lifespan (`generation_queue.py`).
 
@@ -65,10 +75,21 @@ The worker starts automatically via FastAPI lifespan (`generation_queue.py`).
 GET /api/ai/providers
 ```
 
-### Poll generation job
+Returns active backend status plus provider-specific capability flags:
 
-```http
-GET /api/generation-jobs/{jobId}
+```json
+[
+  {
+    "name": "meshy",
+    "active": true,
+    "available": true,
+    "configured": true,
+    "text": true,
+    "image": true,
+    "reason": "",
+    "async": true
+  }
+]
 ```
 
 ### Text to 3D
@@ -96,28 +117,26 @@ hint: optional text hint
 name: optional project name
 ```
 
-Both return a `projectId` and eventually `sourceFileUrl` (GLB) — then call `POST /api/process-model`.
+Both return a `projectId` and eventually `sourceFileUrl` (GLB), then call
+`POST /api/process-model`.
 
-## Meshy integration
+## Meshy Integration
 
-Uses Meshy REST API with papercraft-friendly settings:
+Meshy uses papercraft-friendly settings:
 
-- **Text:** `POST /openapi/v2/text-to-3d` with `mode: preview`, `model_type: lowpoly`
-- **Image:** `POST /openapi/v1/image-to-3d` with `should_texture: false`, `target_formats: ["glb"]`
+- Text: `POST /openapi/v2/text-to-3d` with preview/low-poly options.
+- Image: `POST /openapi/v1/image-to-3d` with textures disabled and GLB output.
 
 Images are sent as base64 data URIs from local storage.
 
-## TripoSR integration
+## TripoSR Integration
 
-TripoSR runs via [Replicate](https://replicate.com) using `TRIPOSR_REPLICATE_VERSION` (model version hash). Install optional dependency:
-
-```bash
-pip install replicate
-```
+TripoSR runs via Replicate using `TRIPOSR_REPLICATE_VERSION`. It is image-only;
+use Meshy or a configured Replicate text model for text-to-3D.
 
 ## Architecture
 
-```
+```text
 app/services/ai/
   base.py              # ModelGeneratorProvider interface
   generation_queue.py  # Background worker
@@ -131,6 +150,8 @@ app/services/ai/
     replicate.py
 ```
 
-## Frontend polling
+## Frontend
 
-`apps/web/lib/generation-job.ts` exposes `pollGenerationJob(jobId)` used by Text/Image panels with progress UI.
+`apps/web/lib/generation-job.ts` exposes `pollGenerationJob(jobId)`. The Text
+and Image panels also call `/api/ai/providers` to show whether the app is using
+a real AI backend or offline mock generation.

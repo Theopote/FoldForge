@@ -20,8 +20,12 @@ services:
       FOLDFORGE_REQUIRE_API_AUTH: ${FOLDFORGE_REQUIRE_API_AUTH:-false}
       FOLDFORGE_API_KEY: ${FOLDFORGE_API_KEY:-}
       AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_ALLOW_PROVIDER_FALLBACK: ${AI_ALLOW_PROVIDER_FALLBACK:-false}
       MESHY_API_KEY: ${MESHY_API_KEY:-}
       REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:-}
+      REPLICATE_TEXT_MODEL: ${REPLICATE_TEXT_MODEL:-}
+      REPLICATE_IMAGE_MODEL: ${REPLICATE_IMAGE_MODEL:-}
+      TRIPOSR_REPLICATE_VERSION: ${TRIPOSR_REPLICATE_VERSION:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 15s
