@@ -187,7 +187,7 @@ async def update_project_seams(
     action = "toggle"
     if body.seams is not None:
         action = "replace"
-        candidate = {parse_mesh_edge(item) for item in body.seams}
+        candidate = {_parse_mesh_edge_for_api(item) for item in body.seams}
         error = validate_seam_set(mesh, candidate, project.settings.difficulty)
         if error is not None:
             raise HTTPException(status_code=400, detail=error)
@@ -196,7 +196,7 @@ async def update_project_seams(
         new_seams, error = apply_seam_toggle(
             mesh,
             seams,
-            parse_mesh_edge(body.toggle.mesh_edge),
+            _parse_mesh_edge_for_api(body.toggle.mesh_edge),
             project.settings.difficulty,
         )
         if error is not None:
@@ -273,3 +273,10 @@ async def get_project_process_job(project_id: str) -> ProcessJobResponse:
         )
 
     return build_process_job_response(job)
+
+
+def _parse_mesh_edge_for_api(raw: str) -> tuple[int, int]:
+    try:
+        return parse_mesh_edge(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

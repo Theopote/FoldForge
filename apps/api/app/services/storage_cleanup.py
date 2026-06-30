@@ -238,7 +238,12 @@ def _register_path(
     except OSError:
         return
 
-    if str(resolved).startswith(str(storage_root)):
+    try:
+        resolved.relative_to(storage_root)
+    except ValueError:
+        return
+
+    if resolved != storage_root:
         referenced.add(resolved)
 
 

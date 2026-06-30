@@ -31,3 +31,32 @@ async def test_patch_project_seams_unknown_project_returns_404(api_client) -> No
         json={"toggle": {"meshEdge": "0,1"}},
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_project_seams_invalid_mesh_edge_returns_400(
+    api_client,
+    fixtures_dir: Path,
+) -> None:
+    from app.schemas.model import ProjectStatus
+    from app.services.project_store import project_store
+
+    with (fixtures_dir / "cube.stl").open("rb") as handle:
+        upload = await api_client.post(
+            "/api/upload-model",
+            files={"file": ("cube.stl", handle, "model/stl")},
+        )
+    project_id = upload.json()["projectId"]
+    project = project_store.get(project_id)
+    assert project is not None
+    project.status = ProjectStatus.READY
+    project.processed_model_url = project.source_file_url
+    project_store.update(project)
+
+    response = await api_client.patch(
+        f"/api/projects/{project_id}/seams",
+        json={"toggle": {"meshEdge": "not-an-edge"}},
+    )
+
+    assert response.status_code == 400
+    assert "invalid mesh edge" in response.json()["detail"].lower()

@@ -157,6 +157,59 @@ def test_cleanup_protects_incomplete_process_job_source(cleanup_env) -> None:
     assert result.protected == 1
 
 
+def test_cleanup_does_not_protect_prefix_sibling_absolute_path(cleanup_env) -> None:
+    uploads: Path = cleanup_env["uploads"]
+    storage_root: Path = cleanup_env["storage_root"]
+    orphan = uploads / "orphan.stl"
+    _touch_old(orphan)
+
+    now = datetime.now(timezone.utc)
+    sibling = storage_root.parent / f"{storage_root.name}-evil" / "orphan.stl"
+    payload = ProcessJob(
+        id="jobprefix",
+        projectId="projprefix",
+        status=JobStatus.RUNNING,
+        settings=ProjectSettings(),
+        projectName="Prefix",
+        sourcePath=str(sibling),
+        createdAt=now,
+        updatedAt=now,
+    )
+
+    from app.services.storage_cleanup import database
+
+    with database.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO projects (id, data, created_at, updated_at)
+            VALUES ('projprefix', '{}', ?, ?)
+            """,
+            (now.isoformat(), now.isoformat()),
+        )
+        conn.execute(
+            """
+            INSERT INTO process_jobs (
+                id, project_id, data, status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.id,
+                payload.project_id,
+                json.dumps(payload.model_dump(mode="json", by_alias=True)),
+                payload.status.value,
+                now.isoformat(),
+                now.isoformat(),
+            ),
+        )
+
+    result = run_storage_cleanup(now=time.time())
+
+    assert not orphan.exists()
+    assert result.deleted == 1
+    assert result.protected == 0
+
+
 def test_cleanup_skips_gitkeep(cleanup_env) -> None:
     gitkeep = cleanup_env["uploads"] / ".gitkeep"
     _touch_old(gitkeep, age_days=30)
