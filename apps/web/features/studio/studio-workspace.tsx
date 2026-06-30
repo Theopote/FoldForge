@@ -24,6 +24,9 @@ export function StudioWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlProjectId = searchParams.get("project");
+  const sampleId = searchParams.get("sample");
+  const promptCaseId = searchParams.get("promptCase");
+  const hasCaseRequest = Boolean(sampleId || promptCaseId);
 
   const { projectId, status, craftability, addLog } = useStudioStore();
   const hydratingRef = useRef<string | null>(null);
@@ -64,21 +67,23 @@ export function StudioWorkspace() {
 
   // Keep the URL in sync when the in-memory project changes (upload / AI create).
   useEffect(() => {
+    if (hasCaseRequest) return;
     if (!projectId || projectId === urlProjectId) return;
     router.replace(`/studio?project=${encodeURIComponent(projectId)}`, {
       scroll: false,
     });
-  }, [projectId, urlProjectId, router]);
+  }, [hasCaseRequest, projectId, urlProjectId, router]);
 
   // Initial open: store empty → load from ?project= or last local id.
   useEffect(() => {
+    if (hasCaseRequest) return;
     if (projectId) return;
 
     const targetId = resolveStudioProjectId(urlProjectId, loadLastProjectId());
     if (!targetId) return;
 
     return runHydration(targetId, "Restored project");
-  }, [projectId, urlProjectId, runHydration]);
+  }, [hasCaseRequest, projectId, urlProjectId, runHydration]);
 
   // Explicit navigation to /studio?project=other while another project is loaded.
   useEffect(() => {

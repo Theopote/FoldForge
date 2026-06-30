@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles, Wand2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
@@ -28,6 +28,7 @@ import type { Style } from "@/types";
 
 export function TextToModelPanel() {
   const searchParams = useSearchParams();
+  const appliedPromptCaseRef = useRef<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<Style>("low_poly");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -39,15 +40,17 @@ export function TextToModelPanel() {
 
   useEffect(() => {
     const promptCaseId = searchParams.get("promptCase");
-    if (!promptCaseId || prompt) return;
+    if (!promptCaseId) return;
+    if (appliedPromptCaseRef.current === promptCaseId) return;
 
     const example = TEXT_PROMPT_CASES.find((item) => item.id === promptCaseId);
     if (example?.prompt) {
+      appliedPromptCaseRef.current = promptCaseId;
       queueMicrotask(() => {
         setPrompt(example.prompt ?? "");
       });
     }
-  }, [prompt, searchParams]);
+  }, [searchParams]);
 
   const handleGenerate = async () => {
     if (prompt.trim().length < 3) {

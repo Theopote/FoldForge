@@ -85,7 +85,7 @@ export function ModelUploadPanel() {
 
   useEffect(() => {
     const sampleId = searchParams.get("sample");
-    if (!sampleId || sourceFileUrl || isUploading) return;
+    if (!sampleId || isUploading) return;
     if (autoLoadedSampleRef.current === sampleId) return;
 
     const sample = LOADABLE_SAMPLE_CASES.find((item) => item.id === sampleId);
@@ -95,7 +95,7 @@ export function ModelUploadPanel() {
     queueMicrotask(() => {
       void loadSample(sample);
     });
-  }, [isUploading, loadSample, searchParams, sourceFileUrl]);
+  }, [isUploading, loadSample, searchParams]);
 
   return (
     <div className="space-y-3">
