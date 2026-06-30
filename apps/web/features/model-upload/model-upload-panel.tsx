@@ -22,6 +22,7 @@ export function ModelUploadPanel() {
     projectId,
     sourceFileName,
     sourceFileUrl,
+    setLocalSamplePreview,
     setUploadResult,
     addLog,
     setError,
@@ -65,6 +66,10 @@ export function ModelUploadPanel() {
   const loadSample = useCallback(async (sample: SampleCase & { samplePath: string; sampleFileName: string }) => {
     setIsUploading(true);
     setError(null);
+    setLocalSamplePreview({
+      sourceFileUrl: sample.samplePath,
+      fileName: sample.sampleFileName,
+    });
     addLog(`Loading sample model (${sample.sampleFileName})...`);
 
     try {
@@ -81,7 +86,7 @@ export function ModelUploadPanel() {
       addLog(`Error: ${message}`);
       setIsUploading(false);
     }
-  }, [addLog, setError, uploadFile]);
+  }, [addLog, setError, setLocalSamplePreview, uploadFile]);
 
   useEffect(() => {
     const sampleId = searchParams.get("sample");

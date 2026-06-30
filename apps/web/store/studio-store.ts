@@ -70,6 +70,10 @@ type StudioState = {
   seamInspectorMode: boolean;
   showOverlapHeatmap: boolean;
   setSourceType: (sourceType: SourceType) => void;
+  setLocalSamplePreview: (payload: {
+    sourceFileUrl: string;
+    fileName: string;
+  }) => void;
   setUploadResult: (payload: {
     projectId: string;
     sourceFileUrl: string;
@@ -174,6 +178,25 @@ function touchProjectSession(projectId: string): void {
 export const useStudioStore = create<StudioState>((set) => ({
   ...initialState,
   setSourceType: (sourceType) => set({ sourceType }),
+  setLocalSamplePreview: ({ sourceFileUrl, fileName }) =>
+    set(() => {
+      cancelAllJobPolls();
+      return {
+        projectId: null,
+        sourceFileUrl,
+        sourceFileName: fileName,
+        projectName: fileName.replace(/\.[^.]+$/, ""),
+        sourceType: "upload_3d" as SourceType,
+        sourcePrompt: null,
+        sourceImageUrl: null,
+        aiProvider: null,
+        enhancedPrompt: null,
+        activeJobId: null,
+        activeProcessJobId: null,
+        status: "uploaded" as ProjectStatus,
+        ...applyGenerationReset(),
+      };
+    }),
   setUploadResult: ({ projectId, sourceFileUrl, fileName }) =>
     set(() => {
       cancelAllJobPolls();
