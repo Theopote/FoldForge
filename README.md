@@ -27,6 +27,15 @@ foldforge/
 - **Node.js** 20+
 - **Python** 3.11+
 - **npm**
+- **Docker Desktop** (optional, for production-like local deployment)
+
+Before a demo or release validation, run:
+
+```bash
+npm run doctor
+```
+
+`doctor` checks Node/npm, Python, Docker, frontend/API ports, and API health so broken local environments fail loudly.
 
 ## Quick Start
 
@@ -145,7 +154,7 @@ Aborting the frontend poll (`AbortSignal`) stops status updates locally; use **C
 | Step | Status | Description |
 |------|--------|-------------|
 | 1 | ✅ Done | Project init, monorepo, README, basic API |
-| 2 | ✅ Done | Homepage, Studio UI, placeholders |
+| 2 | ✅ Done | Homepage, Studio UI, sample cases |
 | 3 | ✅ Done | Model upload + project ID |
 | 4 | ✅ Done | 3D preview (OBJ/STL/GLB) + mesh stats |
 | 5 | ✅ Done | Geometry pipeline + SVG/PDF export |
@@ -165,7 +174,7 @@ Aborting the frontend poll (`AbortSignal`) stops status updates locally; use **C
 | GET | `/api/ai/providers` | List AI providers |
 | POST | `/api/process-model` | Queue papercraft job → returns `jobId` (202) |
 | GET | `/api/process-jobs/{jobId}` | Poll process job status / result |
-| GET | `/api/process-jobs/{jobId}/events` | **SSE** process job progress (prototype) |
+| GET | `/api/process-jobs/{jobId}/events` | **SSE** process job progress |
 | GET | `/api/jobs/{jobId}/events` | **SSE** any async job (unified) |
 | POST | `/api/process-jobs/{jobId}/cancel` | Cancel queued job or request stop for running job |
 | GET | `/api/projects/:id` | Get project |

@@ -24,6 +24,7 @@ export function ModelUploadPanel() {
     sourceFileUrl,
     setLocalSamplePreview,
     setUploadResult,
+    setResults,
     addLog,
     setError,
   } = useStudioStore();
@@ -66,20 +67,22 @@ export function ModelUploadPanel() {
   const loadSample = useCallback(async (sample: SampleCase & { samplePath: string; sampleFileName: string }) => {
     setIsUploading(true);
     setError(null);
+    const offlineCraftability = sample.unfoldSvgPath
+      ? {
+          score: sample.difficulty === "Easy" ? 92 : 82,
+          level: sample.difficulty === "Easy" ? "excellent" as const : "good" as const,
+          warnings: [
+            "Offline sample preview. Regenerate the template for production exports.",
+          ],
+        }
+      : null;
+
     setLocalSamplePreview({
       sourceFileUrl: sample.samplePath,
       fileName: sample.sampleFileName,
       unfoldSvgUrl: sample.unfoldSvgPath ?? null,
       stats: sample.stats ?? null,
-      craftability: sample.unfoldSvgPath
-        ? {
-            score: sample.difficulty === "Easy" ? 92 : 82,
-            level: sample.difficulty === "Easy" ? "excellent" : "good",
-            warnings: [
-              "Offline sample preview. Start the API server and regenerate for production exports.",
-            ],
-          }
-        : null,
+      craftability: offlineCraftability,
     });
     addLog(`Loading sample model (${sample.sampleFileName})...`);
 
@@ -89,15 +92,34 @@ export function ModelUploadPanel() {
 
       const blob = await response.blob();
       const file = new File([blob], sample.sampleFileName, { type: "model/stl" });
-      await uploadFile(file);
+      addLog(`Uploading ${sample.sampleFileName}...`);
+      const data = await uploadModel(file);
+      setUploadResult({
+        projectId: data.projectId,
+        sourceFileUrl: data.sourceFileUrl,
+        fileName: sample.sampleFileName,
+      });
+      setResults({
+        unfoldSvgUrl: sample.unfoldSvgPath ?? null,
+        stats: sample.stats ?? null,
+        craftability: offlineCraftability,
+      });
+      addLog(`Upload complete. Project ID: ${data.projectId}`);
+      if (sample.unfoldSvgPath) {
+        addLog("Offline 2D unfold preview kept until you regenerate the template.");
+      }
+      setIsUploading(false);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Sample load failed.";
       setError(message);
-      addLog(`Error: ${message}`);
+      addLog(`Backend upload skipped: ${message}`);
+      if (sample.unfoldSvgPath) {
+        addLog("Offline sample preview is still available.");
+      }
       setIsUploading(false);
     }
-  }, [addLog, setError, setLocalSamplePreview, uploadFile]);
+  }, [addLog, setError, setLocalSamplePreview, setResults, setUploadResult]);
 
   useEffect(() => {
     const sampleId = searchParams.get("sample");
@@ -151,7 +173,7 @@ export function ModelUploadPanel() {
           Drop OBJ / STL / GLB / GLTF here, or click to browse
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Max 50 MB · Triangulated meshes work best
+          Max 50 MB - triangulated meshes work best
         </p>
         <input
           ref={inputRef}

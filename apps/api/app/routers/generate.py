@@ -1,11 +1,13 @@
 """AI text/image → 3D model generation endpoints."""
 
+import io
 from datetime import datetime, timezone
 from pathlib import Path
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+from PIL import Image, UnidentifiedImageError
 
 from app.config import settings
 from app.schemas.generate import AiProviderInfo, GenerateFromTextRequest, GenerateModelResponse
@@ -17,7 +19,7 @@ from app.services.ai.job_response import build_generation_job_response
 from app.services.ai.job_store import generation_job_store
 from app.services.ai.registry import get_model_provider, list_providers, should_use_async_queue
 from app.services.project_store import project_store
-from app.utils.file_utils import build_storage_url, generate_project_id
+from app.utils.file_utils import build_storage_url, generate_project_id, read_upload_with_limit
 
 router = APIRouter()
 
@@ -117,13 +119,13 @@ async def generate_from_image(
         allowed = ", ".join(sorted(IMAGE_EXTENSIONS))
         raise HTTPException(status_code=400, detail=f"Unsupported image type. Allowed: {allowed}")
 
-    content = await file.read()
     max_bytes = settings.max_image_size_mb * 1024 * 1024
-    if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Image too large. Maximum is {settings.max_image_size_mb} MB.",
-        )
+    content = await read_upload_with_limit(
+        file,
+        max_bytes=max_bytes,
+        empty_detail="Uploaded image file is empty.",
+    )
+    _validate_image_content(content)
 
     project_id = generate_project_id()
     image_path = settings.uploads_dir / f"{project_id}_ref{extension}"
@@ -294,3 +296,14 @@ def _name_from_prompt(prompt: str) -> str:
     """Derive a short project name from the user prompt."""
     cleaned = prompt.strip()[:48]
     return cleaned if cleaned else "AI Model"
+
+
+def _validate_image_content(content: bytes) -> None:
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Image content does not match a supported image format.",
+        ) from exc
