@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { SAMPLE_CASES } from "@/lib/sample-cases";
 
 const STEPS = [
   {
@@ -35,34 +36,6 @@ const STEPS = [
     icon: Scissors,
     title: "Cut, fold and build",
     description: "Print, cut along the lines, fold, glue tabs, and assemble.",
-  },
-];
-
-const EXAMPLES = [
-  {
-    title: "Low Poly Animal",
-    tag: "Easy",
-    color: "from-emerald-100 to-teal-50",
-  },
-  {
-    title: "Cute Robot",
-    tag: "Standard",
-    color: "from-sky-100 to-blue-50",
-  },
-  {
-    title: "Fantasy Castle",
-    tag: "Advanced",
-    color: "from-violet-100 to-purple-50",
-  },
-  {
-    title: "Game Prop",
-    tag: "Standard",
-    color: "from-amber-100 to-orange-50",
-  },
-  {
-    title: "Architecture Model",
-    tag: "Advanced",
-    color: "from-rose-100 to-pink-50",
   },
 ];
 
@@ -145,7 +118,7 @@ export default function HomePage() {
             <div>
               <h2 className="text-3xl font-bold tracking-tight">Example kits</h2>
               <p className="mt-2 text-muted-foreground">
-                Sample styles you can create with FoldForge.
+                Practical starter cases you can preview, generate, and turn into printable kits.
               </p>
             </div>
             <Button asChild variant="outline">
@@ -153,21 +126,52 @@ export default function HomePage() {
             </Button>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {EXAMPLES.map((example) => (
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {SAMPLE_CASES.map((example) => (
               <Card
                 key={example.title}
                 className="overflow-hidden border-border/70 shadow-none transition hover:shadow-md"
               >
                 <div
-                  className={`flex h-32 items-end bg-gradient-to-br ${example.color} p-4`}
+                  className={`flex min-h-36 flex-col justify-between bg-gradient-to-br ${example.color} p-4`}
                 >
-                  <Badge variant="outline" className="bg-white/70">
-                    {example.tag}
-                  </Badge>
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="outline" className="bg-white/80">
+                      {example.tag}
+                    </Badge>
+                    <Badge variant="secondary">{example.difficulty}</Badge>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">{example.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {example.summary}
+                    </p>
+                  </div>
                 </div>
-                <CardContent className="p-4">
-                  <p className="font-medium">{example.title}</p>
+                <CardContent className="space-y-3 p-4">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Best for
+                    </p>
+                    <p className="mt-1 text-sm">{example.bestFor}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Suggested setup
+                    </p>
+                    <p className="mt-1 text-sm">{example.settings}</p>
+                  </div>
+                  <Button asChild variant="outline" size="sm" className="w-full">
+                    <Link
+                      href={
+                        example.samplePath
+                          ? `/studio?sample=${example.id}`
+                          : `/studio?promptCase=${example.id}`
+                      }
+                    >
+                      Open in Studio
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             ))}

@@ -1,17 +1,21 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileUp, Loader2, Sparkles, Upload } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { uploadModel } from "@/lib/api";
+import { LOADABLE_SAMPLE_CASES, type SampleCase } from "@/lib/sample-cases";
 import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 
 const ACCEPTED_TYPES = ".obj,.stl,.glb,.gltf";
 
 export function ModelUploadPanel() {
+  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoLoadedSampleRef = useRef<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const {
@@ -58,17 +62,17 @@ export function ModelUploadPanel() {
     [uploadFile],
   );
 
-  const loadSample = useCallback(async () => {
+  const loadSample = useCallback(async (sample: SampleCase & { samplePath: string; sampleFileName: string }) => {
     setIsUploading(true);
     setError(null);
-    addLog("Loading sample model (box.stl)...");
+    addLog(`Loading sample model (${sample.sampleFileName})...`);
 
     try {
-      const response = await fetch("/samples/box.stl");
+      const response = await fetch(sample.samplePath);
       if (!response.ok) throw new Error("Failed to load sample model.");
 
       const blob = await response.blob();
-      const file = new File([blob], "box.stl", { type: "model/stl" });
+      const file = new File([blob], sample.sampleFileName, { type: "model/stl" });
       await uploadFile(file);
     } catch (error) {
       const message =
@@ -78,6 +82,20 @@ export function ModelUploadPanel() {
       setIsUploading(false);
     }
   }, [addLog, setError, uploadFile]);
+
+  useEffect(() => {
+    const sampleId = searchParams.get("sample");
+    if (!sampleId || sourceFileUrl || isUploading) return;
+    if (autoLoadedSampleRef.current === sampleId) return;
+
+    const sample = LOADABLE_SAMPLE_CASES.find((item) => item.id === sampleId);
+    if (!sample) return;
+
+    autoLoadedSampleRef.current = sampleId;
+    queueMicrotask(() => {
+      void loadSample(sample);
+    });
+  }, [isUploading, loadSample, searchParams, sourceFileUrl]);
 
   return (
     <div className="space-y-3">
@@ -150,14 +168,17 @@ export function ModelUploadPanel() {
         >
           Choose File
         </Button>
-        <Button
-          variant="outline"
-          disabled={isUploading}
-          onClick={() => void loadSample()}
-        >
-          <Sparkles className="mr-1 h-4 w-4" />
-          Try Sample
-        </Button>
+        {LOADABLE_SAMPLE_CASES.map((sample) => (
+          <Button
+            key={sample.id}
+            variant="outline"
+            disabled={isUploading}
+            onClick={() => void loadSample(sample)}
+          >
+            <Sparkles className="mr-1 h-4 w-4" />
+            {sample.title}
+          </Button>
+        ))}
       </div>
     </div>
   );

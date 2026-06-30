@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Sparkles, Wand2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,19 +21,13 @@ import {
   clearJobProgressTracking,
   reportJobProgress,
 } from "@/lib/job-progress";
+import { TEXT_PROMPT_CASES } from "@/lib/sample-cases";
 import { isAbortError } from "@/lib/poll-utils";
 import { useStudioStore } from "@/store/studio-store";
 import type { Style } from "@/types";
 
-const EXAMPLE_PROMPTS = [
-  "A low poly cat for papercraft",
-  "Cute chibi robot toy",
-  "Geometric castle tower",
-  "Simple fantasy tree",
-  "Cartoon racing car",
-];
-
 export function TextToModelPanel() {
+  const searchParams = useSearchParams();
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<Style>("low_poly");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -41,6 +36,18 @@ export function TextToModelPanel() {
   const showAiProgress = isGenerating && jobPhase === "ai_generation";
 
   useEffect(() => () => cancelJobPoll("generation"), []);
+
+  useEffect(() => {
+    const promptCaseId = searchParams.get("promptCase");
+    if (!promptCaseId || prompt) return;
+
+    const example = TEXT_PROMPT_CASES.find((item) => item.id === promptCaseId);
+    if (example?.prompt) {
+      queueMicrotask(() => {
+        setPrompt(example.prompt ?? "");
+      });
+    }
+  }, [prompt, searchParams]);
 
   const handleGenerate = async () => {
     if (prompt.trim().length < 3) {
@@ -157,14 +164,14 @@ export function TextToModelPanel() {
       <div className="space-y-2">
         <Label className="text-xs text-muted-foreground">Try an example</Label>
         <div className="flex flex-wrap gap-1.5">
-          {EXAMPLE_PROMPTS.map((example) => (
+          {TEXT_PROMPT_CASES.map((example) => (
             <Badge
-              key={example}
+              key={example.id}
               variant="outline"
               className="cursor-pointer hover:bg-muted"
-              onClick={() => setPrompt(example)}
+              onClick={() => setPrompt(example.prompt ?? "")}
             >
-              {example}
+              {example.title}
             </Badge>
           ))}
         </div>

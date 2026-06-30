@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { ImageIcon, Type, Upload } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { ImageToModelPanel } from "@/features/model-upload/image-to-model-panel";
 import { ModelUploadPanel } from "@/features/model-upload/model-upload-panel";
@@ -10,7 +12,20 @@ import type { SourceType } from "@/types";
 import { useStudioStore } from "@/store/studio-store";
 
 export function CreateSourcePanel() {
+  const searchParams = useSearchParams();
   const { sourceType, setSourceType } = useStudioStore();
+  const sampleId = searchParams.get("sample");
+  const promptCaseId = searchParams.get("promptCase");
+
+  useEffect(() => {
+    if (sampleId && sourceType !== "upload_3d") {
+      setSourceType("upload_3d");
+      return;
+    }
+    if (promptCaseId && sourceType !== "text_to_3d") {
+      setSourceType("text_to_3d");
+    }
+  }, [promptCaseId, sampleId, setSourceType, sourceType]);
 
   return (
     <Tabs
