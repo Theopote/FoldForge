@@ -109,18 +109,22 @@ function SceneModel({
   faceHeat,
   showHeatmap = false,
 }: SceneModelProps) {
-  const [object, setObject] = useState<THREE.Object3D | null>(null);
+  const [loaded, setLoaded] = useState<{
+    url: string;
+    object: THREE.Object3D;
+  } | null>(null);
   const onLoadedRef = useRef(onLoaded);
   const onErrorRef = useRef(onError);
   const onTransformReadyRef = useRef(onTransformReady);
 
-  onLoadedRef.current = onLoaded;
-  onErrorRef.current = onError;
-  onTransformReadyRef.current = onTransformReady;
+  useEffect(() => {
+    onLoadedRef.current = onLoaded;
+    onErrorRef.current = onError;
+    onTransformReadyRef.current = onTransformReady;
+  }, [onLoaded, onError, onTransformReady]);
 
   useEffect(() => {
     let cancelled = false;
-    setObject(null);
 
     loadModelFromUrl(url)
       .then((loaded) => {
@@ -150,7 +154,7 @@ function SceneModel({
         onTransformReadyRef.current({ center, scale });
 
         const stats = computeModelMeshStats(loaded);
-        setObject(loaded);
+        setLoaded({ url, object: loaded });
         onLoadedRef.current(stats);
       })
       .catch((error) => {
@@ -165,6 +169,8 @@ function SceneModel({
       cancelled = true;
     };
   }, [url]);
+
+  const object = loaded?.url === url ? loaded.object : null;
 
   useEffect(() => {
     if (!object || !showHeatmap || !faceHeat || Object.keys(faceHeat).length === 0) {
@@ -323,11 +329,12 @@ export function ModelViewerCanvas({
   faceHeat = null,
   showHeatmap = false,
 }: ModelViewerCanvasProps) {
-  const [transform, setTransform] = useState<NormalizeTransform | null>(null);
+  const [transformState, setTransformState] = useState<{
+    url: string;
+    transform: NormalizeTransform;
+  } | null>(null);
 
-  useEffect(() => {
-    setTransform(null);
-  }, [url]);
+  const transform = transformState?.url === url ? transformState.transform : null;
 
   const seamLayerEnabled = seamPickEnabled && seamEdges && transform;
 
@@ -352,7 +359,9 @@ export function ModelViewerCanvas({
           url={url}
           onLoaded={onLoaded}
           onError={onError}
-          onTransformReady={setTransform}
+          onTransformReady={(nextTransform) =>
+            setTransformState({ url, transform: nextTransform })
+          }
           faceHeat={faceHeat}
           showHeatmap={showHeatmap}
         />

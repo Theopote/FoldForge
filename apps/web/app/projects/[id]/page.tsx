@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { ArrowLeft, Download, FileText, Loader2 } from "lucide-react";
 
 import { CraftabilityCard } from "@/features/craftability/craftability-card";
@@ -31,19 +31,13 @@ export default function ProjectDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const { id: projectId } = use(params);
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void params.then((p) => setProjectId(p.id));
-  }, [params]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!projectId) return;
-
-    setLoading(true);
     fetch(`/api/projects/${projectId}`, { headers: apiAuthHeaders() })
       .then(async (response) => {
         if (!response.ok) {
@@ -53,14 +47,22 @@ export default function ProjectDetailPage({
         return response.json() as Promise<ProjectDetail>;
       })
       .then((data) => {
+        if (cancelled) return;
         setProject(data);
         setError(null);
       })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
-  if (loading) {
+  if (!project && !error) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

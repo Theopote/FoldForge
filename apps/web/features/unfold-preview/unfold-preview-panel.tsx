@@ -141,7 +141,6 @@ export function UnfoldPreviewPanel() {
               layer={seamInspectorMode ? "lines" : previewLayer}
               className="p-4"
               seamInspector={seamInspectorMode}
-              projectId={projectId}
               manifest={seamManifest}
               onToggleSeam={toggleSeam}
               onUndoSeam={undoSeam}

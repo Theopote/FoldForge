@@ -11,6 +11,7 @@ from fastapi import HTTPException, UploadFile
 from app.utils.file_utils import (
     read_and_validate_model_upload,
     read_upload_with_limit,
+    resolve_storage_path,
     validate_model_content,
     validate_upload_file,
 )
@@ -130,3 +131,16 @@ async def test_read_and_validate_model_upload_rejects_wrong_magic() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await read_and_validate_model_upload(upload)
     assert "does not match" in exc_info.value.detail
+
+
+def test_resolve_storage_path_rejects_prefix_sibling(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage_root = tmp_path / "storage"
+    storage_root.mkdir()
+    monkeypatch.setattr("app.utils.file_utils.settings.storage_root", storage_root)
+
+    escaped = f"/storage/../{storage_root.name}-evil/file.stl"
+    with pytest.raises(ValueError, match="escapes storage root"):
+        resolve_storage_path(escaped)

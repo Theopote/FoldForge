@@ -112,6 +112,5 @@ export async function pollProcessJob(
   return withStreamOrFallback(
     () => streamProcessJob(jobId, options),
     () => pollProcessJobHttp(jobId, options),
-    options.signal,
   );
 }

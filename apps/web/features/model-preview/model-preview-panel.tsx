@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Box, Flame, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ export function ModelPreviewPanel() {
     addLog,
     setError,
   } = useStudioStore();
-  const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const [loadedPreviewUrl, setLoadedPreviewUrl] = useState<string | null>(null);
 
   const previewUrl =
     status === "ready" && processedModelUrl ? processedModelUrl : sourceFileUrl;
@@ -43,30 +43,26 @@ export function ModelPreviewPanel() {
     seamInspectorMode && status === "ready",
   );
 
-  useEffect(() => {
-    if (previewUrl) {
-      setIsLoadingModel(true);
-    }
-  }, [previewUrl]);
+  const isLoadingModel = Boolean(previewUrl && loadedPreviewUrl !== previewUrl);
 
   const handleLoaded = useCallback(
     (loadedStats: ModelMeshStats) => {
       setMeshStats(loadedStats);
-      setIsLoadingModel(false);
+      setLoadedPreviewUrl(previewUrl ?? null);
       addLog(
-        `3D preview loaded — ${loadedStats.faces} faces, ${loadedStats.vertices} vertices`,
+        `3D preview loaded - ${loadedStats.faces} faces, ${loadedStats.vertices} vertices`,
       );
     },
-    [addLog, setMeshStats],
+    [addLog, previewUrl, setMeshStats],
   );
 
   const handleError = useCallback(
     (message: string) => {
-      setIsLoadingModel(false);
+      setLoadedPreviewUrl(previewUrl ?? null);
       setError(message);
       addLog(`3D preview error: ${message}`);
     },
-    [addLog, setError],
+    [addLog, previewUrl, setError],
   );
 
   const handleSeamSelect = useCallback(
@@ -116,7 +112,7 @@ export function ModelPreviewPanel() {
             </Badge>
           )}
           <Badge variant="outline" className="text-xs">
-            Craftability: {craftability ? `${craftability.score}` : "—"}
+            Craftability: {craftability ? `${craftability.score}` : "-"}
           </Badge>
           <Badge variant="secondary">{status}</Badge>
         </div>
@@ -157,17 +153,17 @@ export function ModelPreviewPanel() {
                 Upload a model to preview
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Drag to rotate · Scroll to zoom · Right-drag to pan
+                Drag to rotate - Scroll to zoom - Right-drag to pan
               </p>
             </div>
           )}
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Metric label="Faces" value={stats?.faces ?? meshStats?.faces ?? "—"} />
-          <Metric label="Pieces" value={stats?.pieces ?? "—"} />
-          <Metric label="Pages" value={stats?.pages ?? "—"} />
-          <Metric label="Vertices" value={meshStats?.vertices ?? "—"} />
+          <Metric label="Faces" value={stats?.faces ?? meshStats?.faces ?? "-"} />
+          <Metric label="Pieces" value={stats?.pieces ?? "-"} />
+          <Metric label="Pages" value={stats?.pages ?? "-"} />
+          <Metric label="Vertices" value={meshStats?.vertices ?? "-"} />
         </div>
       </CardContent>
     </Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { CraftabilityCard } from "@/features/craftability/craftability-card";
@@ -29,7 +29,7 @@ export function StudioWorkspace() {
   const hydratingRef = useRef<string | null>(null);
   const prevUrlProjectIdRef = useRef<string | null>(urlProjectId);
 
-  const runHydration = (targetId: string, logLabel: string) => {
+  const runHydration = useCallback((targetId: string, logLabel: string) => {
     if (hydratingRef.current === targetId) return;
 
     hydratingRef.current = targetId;
@@ -60,7 +60,7 @@ export function StudioWorkspace() {
       cancelled = true;
       cancelAllJobPolls();
     };
-  };
+  }, [addLog, router]);
 
   // Keep the URL in sync when the in-memory project changes (upload / AI create).
   useEffect(() => {
@@ -78,7 +78,7 @@ export function StudioWorkspace() {
     if (!targetId) return;
 
     return runHydration(targetId, "Restored project");
-  }, [projectId, urlProjectId, addLog, router]);
+  }, [projectId, urlProjectId, runHydration]);
 
   // Explicit navigation to /studio?project=other while another project is loaded.
   useEffect(() => {
@@ -88,7 +88,7 @@ export function StudioWorkspace() {
     if (!urlProjectId || urlProjectId === projectId) return;
 
     return runHydration(urlProjectId, "Opened project");
-  }, [urlProjectId, projectId, addLog, router]);
+  }, [urlProjectId, projectId, runHydration]);
 
   // Another tab switched the last project id.
   useEffect(() => {

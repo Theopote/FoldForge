@@ -103,6 +103,5 @@ export async function pollGenerationJob(
   return withStreamOrFallback(
     () => streamGenerationJob(jobId, options),
     () => pollGenerationJobHttp(jobId, options),
-    options.signal,
   );
 }

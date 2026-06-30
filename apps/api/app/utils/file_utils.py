@@ -202,7 +202,12 @@ def resolve_storage_path(storage_url: str) -> Path:
     path = (settings.storage_root / relative).resolve()
     storage_root = settings.storage_root.resolve()
 
-    if not str(path).startswith(str(storage_root)):
+    try:
+        path.relative_to(storage_root)
+    except ValueError as exc:
+        raise ValueError("Storage path escapes storage root.") from exc
+
+    if path == storage_root:
         raise ValueError("Storage path escapes storage root.")
 
     return path

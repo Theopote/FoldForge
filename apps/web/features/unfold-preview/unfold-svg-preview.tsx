@@ -61,13 +61,18 @@ type SelectedSeam = {
   suggestions: SeamSuggestion[];
 };
 
+type MarkupState = {
+  key: string;
+  markup: string | null;
+  error: boolean;
+};
+
 export function UnfoldSvgPreview({
   url,
   revision,
   layer,
   className = "",
   seamInspector = false,
-  projectId = null,
   manifest = null,
   onToggleSeam,
   onUndoSeam,
@@ -80,7 +85,6 @@ export function UnfoldSvgPreview({
   layer: UnfoldPreviewLayer;
   className?: string;
   seamInspector?: boolean;
-  projectId?: string | null;
   manifest?: SeamManifest | null;
   onToggleSeam?: (meshEdge: string) => void | Promise<void>;
   onUndoSeam?: () => void | Promise<void>;
@@ -95,9 +99,11 @@ export function UnfoldSvgPreview({
   const selectedSeamMeshEdge = useStudioStore(
     (state) => state.selectedSeamMeshEdge,
   );
-  const [markup, setMarkup] = useState<string | null>(null);
+  const previewKey = `${url}:${revision}`;
+  const [markupState, setMarkupState] = useState<MarkupState | null>(null);
   const [selectedSeam, setSelectedSeam] = useState<SelectedSeam | null>(null);
-  const [error, setError] = useState(false);
+  const markup = markupState?.key === previewKey ? markupState.markup : null;
+  const error = markupState?.key === previewKey ? markupState.error : false;
 
   const selectSeam = useCallback(
     (
@@ -150,9 +156,6 @@ export function UnfoldSvgPreview({
 
   useEffect(() => {
     let cancelled = false;
-    setMarkup(null);
-    setSelectedSeam(null);
-    setError(false);
 
     void fetch(unfoldPreviewUrl(url, revision))
       .then((response) => {
@@ -163,25 +166,19 @@ export function UnfoldSvgPreview({
       })
       .then((text) => {
         if (!cancelled) {
-          setMarkup(text);
+          setMarkupState({ key: previewKey, markup: text, error: false });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setError(true);
+          setMarkupState({ key: previewKey, markup: null, error: true });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [url, revision]);
-
-  useEffect(() => {
-    if (!seamInspector) {
-      setSelectedSeam(null);
-    }
-  }, [seamInspector]);
+  }, [url, revision, previewKey]);
 
   useEffect(() => {
     if (!seamInspector || !selectedSeamMeshEdge || !manifest || !markup) {
@@ -190,7 +187,9 @@ export function UnfoldSvgPreview({
     if (selectedSeam?.meshEdge === selectedSeamMeshEdge) {
       return;
     }
-    selectSeam(selectedSeamMeshEdge, {});
+    queueMicrotask(() => {
+      selectSeam(selectedSeamMeshEdge, {});
+    });
   }, [
     seamInspector,
     selectedSeamMeshEdge,

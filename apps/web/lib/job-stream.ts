@@ -86,7 +86,6 @@ export function streamJobEvents<T extends Record<string, unknown>>(
 export async function withStreamOrFallback<T>(
   stream: () => Promise<T>,
   fallback: () => Promise<T>,
-  signal?: AbortSignal,
 ): Promise<T> {
   try {
     return await stream();

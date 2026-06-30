@@ -13,6 +13,12 @@ import {
 import { useStudioStore } from "@/store/studio-store";
 
 type PreviewTab = "text" | "steps";
+type PreviewState = {
+  key: string;
+  text: string | null;
+  stepsSvg: string | null;
+  error: boolean;
+};
 
 const STEPS_SVG_STYLES = `
 .assembly-steps-host svg {
@@ -27,24 +33,15 @@ const STEPS_SVG_STYLES = `
 export function InstructionsPreviewPanel() {
   const { projectId, status, exportRevision } = useStudioStore();
   const [tab, setTab] = useState<PreviewTab>("text");
-  const [text, setText] = useState<string | null>(null);
-  const [stepsSvg, setStepsSvg] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
 
   const isReady = status === "ready" && projectId !== null;
+  const previewKey = isReady && projectId ? `${projectId}:${exportRevision}` : null;
 
   useEffect(() => {
-    if (!isReady || !projectId) {
-      setText(null);
-      setStepsSvg(null);
-      setError(false);
-      return;
-    }
+    if (!previewKey || !projectId) return;
 
     let cancelled = false;
-    setText(null);
-    setStepsSvg(null);
-    setError(false);
 
     void fetch(instructionPreviewUrl(projectId, exportRevision))
       .then((response) => {
@@ -55,12 +52,22 @@ export function InstructionsPreviewPanel() {
       })
       .then((content) => {
         if (!cancelled) {
-          setText(content);
+          setPreview((current) => ({
+            key: previewKey,
+            text: content,
+            stepsSvg: current?.key === previewKey ? current.stepsSvg : null,
+            error: false,
+          }));
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setError(true);
+          setPreview((current) => ({
+            key: previewKey,
+            text: current?.key === previewKey ? current.text : null,
+            stepsSvg: current?.key === previewKey ? current.stepsSvg : null,
+            error: true,
+          }));
         }
       });
 
@@ -73,7 +80,12 @@ export function InstructionsPreviewPanel() {
       })
       .then((content) => {
         if (!cancelled && content) {
-          setStepsSvg(content);
+          setPreview((current) => ({
+            key: previewKey,
+            text: current?.key === previewKey ? current.text : null,
+            stepsSvg: content,
+            error: current?.key === previewKey ? current.error : false,
+          }));
         }
       })
       .catch(() => {
@@ -83,13 +95,16 @@ export function InstructionsPreviewPanel() {
     return () => {
       cancelled = true;
     };
-  }, [isReady, projectId, exportRevision]);
+  }, [previewKey, projectId, exportRevision]);
 
   if (!isReady || !projectId) {
     return null;
   }
 
   const urls = instructionExportUrls(projectId);
+  const text = preview?.key === previewKey ? preview.text : null;
+  const stepsSvg = preview?.key === previewKey ? preview.stepsSvg : null;
+  const error = preview?.key === previewKey ? preview.error : false;
 
   return (
     <Card className="border-border/70 shadow-none">
@@ -145,7 +160,7 @@ export function InstructionsPreviewPanel() {
           </p>
         )}
         {!error && tab === "text" && !text && (
-          <p className="text-sm text-muted-foreground">Loading assembly guide…</p>
+          <p className="text-sm text-muted-foreground">Loading assembly guide...</p>
         )}
         {!error && tab === "text" && text && (
           <pre className="max-h-80 overflow-auto rounded-xl border border-border bg-muted/30 p-4 text-xs leading-relaxed whitespace-pre-wrap">

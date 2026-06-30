@@ -8,27 +8,29 @@ import {
   type SeamManifest,
 } from "@/lib/seam-manifest";
 
+type ManifestState = {
+  key: string;
+  manifest: SeamManifest | null;
+};
+
 export function useSeamManifest(
   projectId: string | null,
   revision: number,
   enabled: boolean,
 ): SeamManifest | null {
-  const [manifest, setManifest] = useState<SeamManifest | null>(null);
+  const [state, setState] = useState<ManifestState | null>(null);
+  const key = enabled && projectId ? `${projectId}:${revision}` : null;
 
   useEffect(() => {
-    if (!enabled || !projectId) {
-      setManifest(null);
-      return;
-    }
+    if (!key || !projectId) return;
 
     let cancelled = false;
-    setManifest(null);
 
     void fetch(seamManifestPreviewUrl(projectId, revision))
       .then((response) => (response.ok ? response.json() : null))
       .then((payload) => {
         if (!cancelled && payload) {
-          setManifest(parseSeamManifest(payload));
+          setState({ key, manifest: parseSeamManifest(payload) });
         }
       })
       .catch(() => {
@@ -38,7 +40,7 @@ export function useSeamManifest(
     return () => {
       cancelled = true;
     };
-  }, [projectId, revision, enabled]);
+  }, [projectId, revision, key]);
 
-  return manifest;
+  return state?.key === key ? state.manifest : null;
 }
