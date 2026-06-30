@@ -10,6 +10,7 @@
     "build:web": "npm run build --prefix apps/web",
     "lint:web": "npm run lint --prefix apps/web",
     "install:web": "npm install --prefix apps/web",
+    "doctor": "node scripts/doctor.js",
     "test": "npm run test:api && npm run test:web",
     "test:api": "cd apps/api && python -m pytest",
     "test:api:e2e": "cd apps/api && python -m pytest tests/integration -m e2e",

@@ -164,11 +164,11 @@ export function UnfoldPreviewPanel() {
         </div>
 
         <ExportPanel
-          disabled={status !== "ready"}
+          disabled={!projectId || status !== "ready"}
           svgUrl={unfoldSvgUrl}
           pdfUrl={unfoldPdfUrl}
           zipUrl={unfoldZipUrl}
-          projectReady={status === "ready"}
+          projectReady={Boolean(projectId && status === "ready")}
         />
       </CardContent>
     </Card>
