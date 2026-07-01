@@ -16,6 +16,7 @@ from app.schemas.generate import (
     EnhancePromptResponse,
     GenerateFromTextRequest,
     GenerateModelResponse,
+    LlmProviderInfo,
 )
 from app.schemas.generation_job import GenerationJob, GenerationJobResponse, JobType
 from app.schemas.job import JobStatus
@@ -26,6 +27,7 @@ from app.services.ai.job_store import generation_job_store
 from app.services.ai.prompt_builder import enhance_text_prompt
 from app.services.ai.rate_limit import enforce_ai_generation_rate_limit
 from app.services.ai.registry import get_model_provider, list_providers, should_use_async_queue
+from app.services.llm import list_llm_providers
 from app.services.project_store import project_store
 from app.utils.file_utils import build_storage_url, generate_project_id, read_upload_with_limit
 
@@ -38,6 +40,12 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 async def get_ai_providers() -> list[AiProviderInfo]:
     """List available AI generation providers and which is active."""
     return [AiProviderInfo(**item) for item in list_providers()]
+
+
+@router.get("/llm/providers", response_model=list[LlmProviderInfo])
+async def get_llm_providers() -> list[LlmProviderInfo]:
+    """List available LLM providers for instructions, prompt enhance, and seam advisor."""
+    return [LlmProviderInfo(**item) for item in list_llm_providers()]
 
 
 @router.post("/ai/enhance-prompt", response_model=EnhancePromptResponse)

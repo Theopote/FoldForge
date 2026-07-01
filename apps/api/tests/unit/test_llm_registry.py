@@ -60,3 +60,21 @@ def test_parse_llm_json_strips_markdown_fence() -> None:
     )
     assert payload["enhanced_prompt"] == "fox"
     assert payload["tip"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_get_llm_providers_endpoint(test_env) -> None:
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import app
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/api/llm/providers")
+
+    assert response.status_code == 200
+    body = response.json()
+    names = {item["name"] for item in body}
+    assert names == {"claude", "openai", "mock", "auto"}
+    resolved_active = [item for item in body if item["active"] and item["name"] != "auto"]
+    assert len(resolved_active) == 1
