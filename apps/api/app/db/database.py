@@ -62,6 +62,12 @@ CREATE TABLE IF NOT EXISTS process_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_process_jobs_project_id
     ON process_jobs(project_id);
+
+CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+    bucket_key TEXT PRIMARY KEY,
+    tokens REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
 """
 
 _PROCESS_JOB_INDEXES = """

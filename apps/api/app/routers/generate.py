@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image, UnidentifiedImageError
 
@@ -17,6 +17,7 @@ from app.schemas.model import ProjectStatus, SourceType, Style
 from app.services.ai.generation_queue import generation_queue
 from app.services.ai.job_response import build_generation_job_response
 from app.services.ai.job_store import generation_job_store
+from app.services.ai.rate_limit import enforce_ai_generation_rate_limit
 from app.services.ai.registry import get_model_provider, list_providers, should_use_async_queue
 from app.services.project_store import project_store
 from app.utils.file_utils import build_storage_url, generate_project_id, read_upload_with_limit
@@ -43,7 +44,7 @@ async def get_generation_job(job_id: str) -> GenerationJobResponse:
 
 
 @router.post("/generate-from-text", response_model=GenerateModelResponse)
-async def generate_from_text(request: GenerateFromTextRequest):
+async def generate_from_text(http_request: Request, request: GenerateFromTextRequest):
     """
     Generate a papercraft-friendly 3D model from a text description.
 
@@ -52,6 +53,7 @@ async def generate_from_text(request: GenerateFromTextRequest):
     """
     provider = get_model_provider("text")
     _ensure_provider_can_run(provider, "text")
+    enforce_ai_generation_rate_limit(http_request, provider.name)
     project_id = generate_project_id()
     output_path = settings.uploads_dir / f"{project_id}.glb"
     name = request.name or _name_from_prompt(request.prompt)
@@ -105,6 +107,7 @@ async def generate_from_text(request: GenerateFromTextRequest):
 
 @router.post("/generate-from-image", response_model=GenerateModelResponse)
 async def generate_from_image(
+    http_request: Request,
     file: UploadFile = File(...),
     style: Style = Form(default=Style.LOW_POLY),
     hint: str | None = Form(default=None),
@@ -131,6 +134,10 @@ async def generate_from_image(
     )
     _validate_image_content(content)
 
+    provider = get_model_provider("image")
+    _ensure_provider_can_run(provider, "image")
+    enforce_ai_generation_rate_limit(http_request, provider.name)
+
     project_id = generate_project_id()
     image_path = settings.uploads_dir / f"{project_id}_ref{extension}"
     output_path = settings.uploads_dir / f"{project_id}.glb"
@@ -138,8 +145,6 @@ async def generate_from_image(
     async with aiofiles.open(image_path, "wb") as output:
         await output.write(content)
 
-    provider = get_model_provider("image")
-    _ensure_provider_can_run(provider, "image")
     project_name = name or Path(file.filename).stem
     image_url = build_storage_url(Path("uploads") / image_path.name)
 

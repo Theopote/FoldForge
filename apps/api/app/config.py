@@ -100,6 +100,29 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Paid AI generation — per API key (or client IP when auth is off)
+    ai_generation_rate_limit_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "AI_GENERATION_RATE_LIMIT_ENABLED",
+            "FOLDFORGE_AI_GENERATION_RATE_LIMIT_ENABLED",
+        ),
+    )
+    ai_generation_rate_limit_per_hour: int = Field(
+        default=12,
+        validation_alias=AliasChoices(
+            "AI_GENERATION_RATE_LIMIT_PER_HOUR",
+            "FOLDFORGE_AI_GENERATION_RATE_LIMIT_PER_HOUR",
+        ),
+    )
+    ai_generation_rate_limit_burst: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "AI_GENERATION_RATE_LIMIT_BURST",
+            "FOLDFORGE_AI_GENERATION_RATE_LIMIT_BURST",
+        ),
+    )
+
     @model_validator(mode="after")
     def validate_auth_settings(self):
         if self.require_api_auth and not self.api_key:
