@@ -47,15 +47,15 @@ async def enhance_prompt_endpoint(request: EnhancePromptRequest) -> EnhancePromp
     Returns a static fallback when Claude is not configured.
     """
     from app.config import settings as app_settings
-    from app.services.ai.claude_client import is_available
+    from app.services.llm import is_llm_available
 
-    if not app_settings.claude_prompt_enhance_enabled or not is_available():
+    if not app_settings.claude_prompt_enhance_enabled or not is_llm_available():
         enhanced = enhance_text_prompt(request.prompt, request.style)
         return EnhancePromptResponse(
             enhancedPrompt=enhanced,
             recommendedStyle=request.style,
             recommendedDifficulty=request.difficulty,
-            tip="请先配置 ANTHROPIC_API_KEY 以启用 AI 优化",
+            tip="请先配置 LLM API Key（ANTHROPIC_API_KEY 或 OPENAI_API_KEY）以启用 AI 优化",
             available=False,
         )
 

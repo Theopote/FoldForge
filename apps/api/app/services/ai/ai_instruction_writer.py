@@ -7,7 +7,7 @@ import json
 from app.config import settings as app_settings
 from app.models.geometry import LayoutPage, UnfoldPiece
 from app.schemas.model import ProjectSettings
-from app.services.ai.claude_client import claude_complete, is_available, parse_claude_json
+from app.services.llm import complete_json, is_llm_available
 from app.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -98,15 +98,14 @@ async def generate_ai_instructions(
     Call Claude to generate personalised instructions.
     Returns None if Claude is not configured or on error (caller uses fallback).
     """
-    if not app_settings.claude_instructions_enabled or not is_available():
+    if not app_settings.claude_instructions_enabled or not is_llm_available():
         return None
 
     context = _build_context(project_name, settings, stats, warnings, pieces, pages)
     user_prompt = _USER_TEMPLATE.format(context=context)
 
     try:
-        raw = await claude_complete(_SYSTEM, user_prompt, max_tokens=800, temperature=0.5)
-        return parse_claude_json(raw)
+        return await complete_json(_SYSTEM, user_prompt, max_tokens=800, temperature=0.5)
     except Exception as exc:
-        logger.warning("Claude instruction generation failed: %s", exc)
+        logger.warning("LLM instruction generation failed: %s", exc)
         return None

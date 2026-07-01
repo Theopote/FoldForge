@@ -44,19 +44,17 @@ async def test_generate_seam_hints_parses_response(
     monkeypatch.setattr(settings, "claude_seam_advisor_enabled", True)
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
 
-    async def fake_complete(system: str, user: str, **kwargs: object) -> str:
+    async def fake_complete(system: str, user: str, **kwargs: object) -> dict:
         _ = (system, user, kwargs)
-        return """
-        {
-          "model_interpretation": "A simple cube model",
-          "structural_notes": "Six flat faces",
-          "suggestions": [],
-          "assembly_order_hint": "先粘底部"
+        return {
+            "model_interpretation": "A simple cube model",
+            "structural_notes": "Six flat faces",
+            "suggestions": [],
+            "assembly_order_hint": "先粘底部",
         }
-        """
 
     monkeypatch.setattr(
-        "app.services.ai.ai_seam_advisor.claude_complete",
+        "app.services.ai.ai_seam_advisor.complete_json",
         fake_complete,
     )
 

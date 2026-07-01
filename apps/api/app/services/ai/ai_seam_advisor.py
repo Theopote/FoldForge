@@ -10,7 +10,7 @@ import trimesh
 from app.config import settings
 from app.models.geometry import UnfoldPiece
 from app.schemas.model import Difficulty
-from app.services.ai.claude_client import claude_complete, is_available, parse_claude_json
+from app.services.llm import complete_json, is_llm_available
 from app.services.seam_generator import EdgeDihedralData
 from app.utils.logging_utils import get_logger
 
@@ -102,7 +102,7 @@ async def generate_seam_hints(
     Returns AI seam hints or None if Claude unavailable / on error.
     Called after geometric seam selection — provides semantic overlay only.
     """
-    if not settings.claude_seam_advisor_enabled or not is_available():
+    if not settings.claude_seam_advisor_enabled or not is_llm_available():
         return None
 
     _ = difficulty
@@ -113,8 +113,7 @@ async def generate_seam_hints(
     )
 
     try:
-        raw = await claude_complete(_SYSTEM, user, max_tokens=500, temperature=0.4)
-        return parse_claude_json(raw)
+        return await complete_json(_SYSTEM, user, max_tokens=500, temperature=0.4)
     except Exception as exc:
-        logger.warning("Claude seam advisor failed: %s", exc)
+        logger.warning("LLM seam advisor failed: %s", exc)
         return None

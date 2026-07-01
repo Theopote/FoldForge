@@ -79,18 +79,16 @@ async def test_generate_ai_instructions_uses_claude_output(
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
     monkeypatch.setattr(settings, "claude_instructions_enabled", True)
 
-    async def fake_complete(system: str, user: str, **kwargs: object) -> str:
+    async def fake_complete(system: str, user: str, **kwargs: object) -> dict:
         _ = (system, user, kwargs)
-        return """
-        {
-          "assembly_steps_en": ["Step 1: fold base"],
-          "chinese_tips": ["一", "二", "三", "四"],
-          "difficulty_note": "Easy kit."
+        return {
+            "assembly_steps_en": ["Step 1: fold base"],
+            "chinese_tips": ["一", "二", "三", "四"],
+            "difficulty_note": "Easy kit.",
         }
-        """
 
     monkeypatch.setattr(
-        "app.services.ai.ai_instruction_writer.claude_complete",
+        "app.services.ai.ai_instruction_writer.complete_json",
         fake_complete,
     )
 

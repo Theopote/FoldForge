@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.config import settings
 from app.schemas.model import Difficulty, Style
-from app.services.ai.claude_client import claude_complete, is_available, parse_claude_json
+from app.services.llm import complete_json, is_llm_available
 
 _SYSTEM = """You are a papercraft design consultant for FoldForge.
 Your job: turn a user's rough idea into an optimised Meshy AI prompt
@@ -44,8 +44,8 @@ async def enhance_prompt(
     Returns enhanced_prompt, recommended_style, recommended_difficulty, tip.
     Raises RuntimeError if Claude is not available.
     """
-    if not settings.claude_prompt_enhance_enabled or not is_available():
-        raise RuntimeError("ANTHROPIC_API_KEY not configured.")
+    if not settings.claude_prompt_enhance_enabled or not is_llm_available():
+        raise RuntimeError("LLM provider is not configured.")
 
     user = _ENHANCE_TEMPLATE.format(
         prompt=prompt.strip(),
@@ -53,5 +53,4 @@ async def enhance_prompt(
         difficulty=difficulty.value,
     )
 
-    raw = await claude_complete(_SYSTEM, user, max_tokens=400, temperature=0.6)
-    return parse_claude_json(raw.strip())
+    return await complete_json(_SYSTEM, user, max_tokens=400, temperature=0.6)

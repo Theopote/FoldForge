@@ -63,7 +63,11 @@ class Settings(BaseSettings):
     meshy_poll_interval_sec: float = 3.0
     meshy_poll_timeout_sec: float = 600.0
 
-    # Claude AI — https://console.anthropic.com
+    # LLM text features — instructions / prompt enhancer / seam advisor
+    llm_provider: str = Field(
+        default="auto",
+        validation_alias=AliasChoices("LLM_PROVIDER", "FOLDFORGE_LLM_PROVIDER"),
+    )
     anthropic_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices("ANTHROPIC_API_KEY", "FOLDFORGE_ANTHROPIC_API_KEY"),
@@ -71,6 +75,14 @@ class Settings(BaseSettings):
     claude_model: str = Field(
         default="claude-sonnet-4-6",
         validation_alias=AliasChoices("CLAUDE_MODEL", "FOLDFORGE_CLAUDE_MODEL"),
+    )
+    openai_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_API_KEY", "FOLDFORGE_OPENAI_API_KEY"),
+    )
+    openai_model: str = Field(
+        default="gpt-4.1-mini",
+        validation_alias=AliasChoices("OPENAI_MODEL", "FOLDFORGE_OPENAI_MODEL"),
     )
     claude_instructions_enabled: bool = Field(
         default=True,
