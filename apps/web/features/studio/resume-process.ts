@@ -51,6 +51,8 @@ export function applyTerminalProcessJob(job: ProcessJobResponse): boolean {
       unfoldZipUrl: job.unfoldZipUrl ?? null,
       stats: job.stats ?? null,
       craftability: (job.craftability as CraftabilityScore | undefined) ?? null,
+      exportBlocked: job.exportBlocked ?? false,
+      hasUnfoldOverlap: job.hasUnfoldOverlap ?? false,
       status: (job.resultStatus as ProjectStatus) ?? "ready",
     });
     addLog("Papercraft template ready.");

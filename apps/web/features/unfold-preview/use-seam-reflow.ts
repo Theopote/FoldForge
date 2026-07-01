@@ -52,6 +52,8 @@ export function useSeamReflow(projectId: string | null) {
           unfoldZipUrl: result.unfoldZipUrl ?? null,
           stats: result.stats ?? null,
           craftability: result.craftability ?? null,
+          exportBlocked: result.exportBlocked ?? false,
+          hasUnfoldOverlap: result.hasUnfoldOverlap ?? false,
           status: "ready",
         });
         addLog("Seam update complete.");

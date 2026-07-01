@@ -2,7 +2,7 @@ import { withStorageAuth } from "@/lib/api-auth";
 
 export function instructionExportUrls(projectId: string) {
   const txt = `/storage/exports/${projectId}.instructions.txt`;
-  const pdf = `/storage/exports/${projectId}.instructions.pdf`;
+  const pdf = `/api/projects/${projectId}/export/instructions-pdf`;
   const stepsSvg = `/storage/exports/${projectId}.assembly-steps.svg`;
   return {
     txt,

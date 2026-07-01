@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import svgwrite
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
@@ -31,7 +30,7 @@ def draw_assembly_step_pages(
     if not steps:
         return
 
-    page_width, page_height = A4
+    page_width, page_height = pdf._pagesize  # type: ignore[attr-defined]
     margin_x = 18 * mm
 
     for step in steps:

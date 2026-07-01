@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { withStorageAuth } from "@/lib/api-auth";
+import { buildExportCautionMessage, inferHasUnfoldOverlap } from "@/lib/export-quality";
 import {
   UnfoldSvgPreview,
   type UnfoldPreviewLayer,
@@ -27,6 +28,9 @@ export function UnfoldPreviewPanel() {
     exportedColorMode,
     seamInspectorMode,
     showOverlapHeatmap,
+    exportBlocked,
+    hasUnfoldOverlap,
+    craftability,
     setSeamInspectorMode,
     setShowOverlapHeatmap,
   } = useStudioStore();
@@ -45,6 +49,9 @@ export function UnfoldPreviewPanel() {
     unfoldSvgUrl !== null &&
     exportedColorMode !== null &&
     settings.colorMode !== exportedColorMode;
+  const overlapDetected = inferHasUnfoldOverlap(hasUnfoldOverlap, craftability);
+  const exportCautionMessage = buildExportCautionMessage(exportBlocked, overlapDetected);
+  const exportDownloadsBlocked = exportBlocked;
 
   return (
     <Card className="flex h-full min-h-[420px] flex-col border-border/70 shadow-none">
@@ -164,11 +171,12 @@ export function UnfoldPreviewPanel() {
         </div>
 
         <ExportPanel
-          disabled={!projectId || status !== "ready"}
+          disabled={!projectId || status !== "ready" || exportDownloadsBlocked}
           svgUrl={unfoldSvgUrl}
           pdfUrl={unfoldPdfUrl}
           zipUrl={unfoldZipUrl}
           projectReady={Boolean(projectId && status === "ready")}
+          cautionMessage={exportCautionMessage}
         />
       </CardContent>
     </Card>
@@ -204,18 +212,23 @@ function ExportPanel({
   pdfUrl,
   zipUrl,
   projectReady,
+  cautionMessage,
 }: {
   disabled: boolean;
   svgUrl: string | null;
   pdfUrl: string | null;
   zipUrl: string | null;
   projectReady: boolean;
+  cautionMessage: string | null;
 }) {
   return (
     <div className="mt-4 space-y-2">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Download
       </p>
+      {cautionMessage && (
+        <p className="text-xs text-amber-700">{cautionMessage}</p>
+      )}
       <div className="grid grid-cols-1 gap-2">
         <DownloadButton
           label="Export PDF"

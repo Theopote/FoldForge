@@ -145,6 +145,31 @@ def test_export_instructions_pdf_bytesio() -> None:
     assert buffer.getvalue()[:4] == b"%PDF"
 
 
+def test_export_instructions_pdf_uses_project_paper_size(tmp_path: Path) -> None:
+    a4_path = tmp_path / "a4.pdf"
+    a3_path = tmp_path / "a3.pdf"
+    stats = {"faces": 4, "pieces": 2, "pages": 1, "craftability": 70, "level": "fair"}
+
+    export_instructions_pdf(
+        a4_path,
+        "Demo",
+        ProjectSettings(paper_size=PaperSize.A4),
+        stats,
+        [],
+    )
+    export_instructions_pdf(
+        a3_path,
+        "Demo",
+        ProjectSettings(paper_size=PaperSize.A3),
+        stats,
+        [],
+    )
+
+    assert a3_path.stat().st_size > 0
+    assert a4_path.stat().st_size > 0
+    assert a3_path.read_bytes()[:4] == b"%PDF"
+
+
 def test_export_instructions_pdf_includes_piece_reference_page(tmp_path: Path) -> None:
     pieces = _sample_pieces()
     minimal_pdf = tmp_path / "minimal.pdf"

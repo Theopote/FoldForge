@@ -31,6 +31,8 @@ export type ProcessModelResponse = {
   unfoldZipUrl?: string;
   stats?: ProcessStats;
   craftability?: CraftabilityScore;
+  exportBlocked?: boolean;
+  hasUnfoldOverlap?: boolean;
 };
 
 export type GenerateModelResponse = {
@@ -236,6 +238,8 @@ export async function reflowProjectSeams(
     unfoldZipUrl: job.unfoldZipUrl,
     stats: job.stats,
     craftability: job.craftability,
+    exportBlocked: job.exportBlocked,
+    hasUnfoldOverlap: job.hasUnfoldOverlap,
     jobId: job.jobId,
     async: true,
     progress: job.progress,
@@ -377,6 +381,8 @@ export async function processModel(
     unfoldZipUrl: job.unfoldZipUrl,
     stats: job.stats,
     craftability: job.craftability,
+    exportBlocked: job.exportBlocked,
+    hasUnfoldOverlap: job.hasUnfoldOverlap,
     jobId: job.jobId,
     async: true,
     progress: job.progress,

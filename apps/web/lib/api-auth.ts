@@ -16,7 +16,13 @@ export function apiAuthHeaders(extra?: HeadersInit): Headers {
 /** Append access_token for Three.js loaders that cannot set request headers. */
 export function withStorageAuth(url: string): string {
   const key = getApiKey();
-  if (!key || !url.startsWith("/storage/")) {
+  if (!key) {
+    return url;
+  }
+  const needsToken =
+    url.startsWith("/storage/") ||
+    (url.startsWith("/api/projects/") && url.includes("/export/"));
+  if (!needsToken) {
     return url;
   }
   const separator = url.includes("?") ? "&" : "?";

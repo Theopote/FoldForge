@@ -5,7 +5,6 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
@@ -18,6 +17,8 @@ from app.services.instruction_generator import (
     _piece_page_map,
 )
 from app.services.instruction_graphics import map_points_to_box, piece_outline_points
+from app.services.instruction_pdf_layout import instruction_page_size
+from app.services.pdf_fonts import instruction_font_for, wrap_instruction_line
 
 
 def export_instructions_pdf(
@@ -57,8 +58,12 @@ def render_instruction_pdf(
     pieces: list[UnfoldPiece] | None = None,
     pages: list[LayoutPage] | None = None,
 ) -> None:
-    pdf = canvas.Canvas(str(output) if isinstance(output, Path) else output, pagesize=A4)
-    page_width, page_height = A4
+    page_size = instruction_page_size(settings)
+    pdf = canvas.Canvas(
+        str(output) if isinstance(output, Path) else output,
+        pagesize=page_size,
+    )
+    page_width, page_height = page_size
     margin_x = 18 * mm
     margin_top = 20 * mm
     margin_bottom = 18 * mm
@@ -77,39 +82,53 @@ def render_instruction_pdf(
         if y - (lines_needed * line_height) < margin_bottom:
             new_page()
 
-    pdf.setFont("Helvetica-Bold", 14)
-    for line in _wrap_line(document.title, "Helvetica-Bold", 14, max_width):
+    def draw_wrapped_lines(
+        text: str,
+        *,
+        font_size: int,
+        weight: str = "regular",
+        indent: float = 0,
+        line_spacing: float = 1.0,
+    ) -> None:
+        nonlocal y
+        font_name = instruction_font_for(text, weight=weight)
+        pdf.setFont(font_name, font_size)
+        for line in wrap_instruction_line(text, font_name, font_size, max_width - indent):
+            ensure_space()
+            pdf.drawString(margin_x + indent, y, line)
+            y -= line_height * line_spacing
+
+    title_font = instruction_font_for(document.title, weight="bold")
+    pdf.setFont(title_font, 14)
+    for line in wrap_instruction_line(document.title, title_font, 14, max_width):
         ensure_space()
         pdf.drawString(margin_x, y, line)
         y -= line_height * 1.4
 
-    pdf.setFont("Helvetica", 9)
-    ensure_space()
-    pdf.drawString(margin_x, y, f"Generated: {document.generated}")
-    y -= line_height * 2
+    generated_line = f"Generated: {document.generated}"
+    draw_wrapped_lines(generated_line, font_size=9)
+    y -= line_height
 
     for title, body in document.sections:
         ensure_space(3)
-        pdf.setFont("Helvetica-Bold", 11)
+        title_font = instruction_font_for(title, weight="bold")
+        pdf.setFont(title_font, 11)
         pdf.drawString(margin_x, y, title)
         y -= line_height * 1.3
 
-        pdf.setFont("Helvetica", 9)
         for entry in body:
-            wrapped = _wrap_line(f"• {entry}", "Helvetica", 9, max_width - 4 * mm)
-            for index, line in enumerate(wrapped):
-                ensure_space()
-                pdf.drawString(margin_x + (4 * mm if index > 0 else 0), y, line)
-                y -= line_height
+            draw_wrapped_lines(
+                f"• {entry}",
+                font_size=9,
+                indent=4 * mm,
+            )
         y -= line_height * 0.6
 
     ensure_space(3)
-    pdf.setFont("Helvetica-Oblique", 8)
-    pdf.drawString(
-        margin_x,
-        y,
-        "FoldForge / 纸模工坊 — Turn imagination into printable paper models.",
-    )
+    footer = "FoldForge / 纸模工坊 — Turn imagination into printable paper models."
+    footer_font = instruction_font_for(footer, weight="italic")
+    pdf.setFont(footer_font, 8)
+    pdf.drawString(margin_x, y, footer)
 
     if pieces:
         _draw_piece_reference_pages(
@@ -136,7 +155,7 @@ def _draw_piece_reference_pages(
     gap_x = 10 * mm
     gap_y = 22 * mm
     margin_x = 18 * mm
-    page_width, page_height = A4
+    page_width, page_height = _canvas_page_size(pdf)
     grid_top = page_height - 28 * mm
 
     for batch_start in range(0, len(sorted_pieces), per_page):
@@ -185,21 +204,5 @@ def _draw_piece_thumbnail(
     pdf.drawPath(path, stroke=1, fill=1)
 
 
-def _wrap_line(text: str, font_name: str, font_size: int, max_width: float) -> list[str]:
-    from reportlab.pdfbase.pdfmetrics import stringWidth
-
-    words = text.split()
-    if not words:
-        return [""]
-
-    lines: list[str] = []
-    current = words[0]
-    for word in words[1:]:
-        candidate = f"{current} {word}"
-        if stringWidth(candidate, font_name, font_size) <= max_width:
-            current = candidate
-        else:
-            lines.append(current)
-            current = word
-    lines.append(current)
-    return lines
+def _canvas_page_size(pdf: canvas.Canvas) -> tuple[float, float]:
+    return pdf._pagesize  # type: ignore[attr-defined]

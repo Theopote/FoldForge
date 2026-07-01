@@ -60,6 +60,8 @@ type StudioState = {
   stats: ProcessStats | null;
   meshStats: ModelMeshStats | null;
   craftability: CraftabilityScore | null;
+  exportBlocked: boolean;
+  hasUnfoldOverlap: boolean;
   logs: string[];
   error: string | null;
   jobPhase: "idle" | "ai_generation" | "papercraft_process";
@@ -96,6 +98,8 @@ type StudioState = {
     unfoldZipUrl?: string | null;
     stats?: ProcessStats | null;
     craftability?: CraftabilityScore | null;
+    exportBlocked?: boolean;
+    hasUnfoldOverlap?: boolean;
   }) => void;
   beginPapercraftProcessing: () => void;
   completePapercraftProcessing: (payload: {
@@ -105,6 +109,8 @@ type StudioState = {
     unfoldZipUrl: string | null;
     stats: ProcessStats | null;
     craftability: CraftabilityScore | null;
+    exportBlocked?: boolean;
+    hasUnfoldOverlap?: boolean;
     status: ProjectStatus;
   }) => void;
   restoreProject: (saved: StudioProjectSnapshot) => void;
@@ -148,6 +154,8 @@ const initialState = {
   stats: null,
   meshStats: null,
   craftability: null,
+  exportBlocked: false,
+  hasUnfoldOverlap: false,
   logs: [] as string[],
   error: null,
   jobPhase: "idle" as const,
@@ -170,6 +178,8 @@ function applyGenerationReset() {
     processedModelUrl: null,
     exportRevision: 0,
     exportedColorMode: null,
+    exportBlocked: false,
+    hasUnfoldOverlap: false,
     error: null,
   };
 }
@@ -295,11 +305,15 @@ export const useStudioStore = create<StudioState>((set) => ({
       unfoldZipUrl: null,
       stats: null,
       craftability: null,
+      exportBlocked: false,
+      hasUnfoldOverlap: false,
       error: null,
     }),
   completePapercraftProcessing: (payload) =>
     set((state) => ({
       ...payload,
+      exportBlocked: payload.exportBlocked ?? false,
+      hasUnfoldOverlap: payload.hasUnfoldOverlap ?? false,
       activeProcessJobId: null,
       exportRevision: state.exportRevision + 1,
       exportedColorMode: state.settings.colorMode,
@@ -325,6 +339,8 @@ export const useStudioStore = create<StudioState>((set) => ({
       settings: saved.settings,
       stats: saved.stats,
       craftability: saved.craftability,
+      exportBlocked: false,
+      hasUnfoldOverlap: false,
       exportRevision: saved.unfoldSvgUrl ? 1 : 0,
       exportedColorMode:
         saved.status === "ready" ? saved.settings.colorMode : null,

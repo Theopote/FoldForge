@@ -82,6 +82,8 @@ export function ProjectSettingsPanel() {
         unfoldZipUrl: data.unfoldZipUrl ?? null,
         stats: data.stats ?? null,
         craftability: (data.craftability as CraftabilityScore | undefined) ?? null,
+        exportBlocked: data.exportBlocked ?? false,
+        hasUnfoldOverlap: data.hasUnfoldOverlap ?? false,
         status: data.status as typeof status,
       });
 

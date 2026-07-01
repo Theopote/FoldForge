@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
+from app.config import settings
 from app.schemas.model import ProjectStatus
 from app.services.project_store import project_store
 from app.utils.file_utils import resolve_storage_path
@@ -32,6 +33,20 @@ async def export_svg(project_id: str) -> FileResponse:
     if not path.is_file():
         raise HTTPException(status_code=404, detail="SVG export file not found.")
     return FileResponse(path, media_type="image/svg+xml", filename=f"{project.name}.svg")
+
+
+@router.get("/projects/{project_id}/export/instructions-pdf")
+async def export_instructions_pdf(project_id: str) -> FileResponse:
+    """Download the assembly instructions PDF for a project."""
+    project = _get_ready_project(project_id)
+    path = settings.exports_dir / f"{project_id}.instructions.pdf"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Instructions PDF not found.")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=f"{project.name}-instructions.pdf",
+    )
 
 
 @router.get("/projects/{project_id}/export/zip")
