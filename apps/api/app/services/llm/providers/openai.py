@@ -7,7 +7,10 @@ import httpx
 from app.config import settings
 from app.services.llm.base import LlmProvider
 
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+
+def _chat_completions_url() -> str:
+    base = settings.openai_base_url.rstrip("/")
+    return f"{base}/chat/completions"
 
 
 class OpenAiLlmProvider(LlmProvider):
@@ -44,7 +47,7 @@ class OpenAiLlmProvider(LlmProvider):
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                OPENAI_API_URL,
+                _chat_completions_url(),
                 headers=headers,
                 json=payload,
             )

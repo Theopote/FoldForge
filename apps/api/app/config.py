@@ -84,6 +84,10 @@ class Settings(BaseSettings):
         default="gpt-4.1-mini",
         validation_alias=AliasChoices("OPENAI_MODEL", "FOLDFORGE_OPENAI_MODEL"),
     )
+    openai_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        validation_alias=AliasChoices("OPENAI_BASE_URL", "FOLDFORGE_OPENAI_BASE_URL"),
+    )
     claude_instructions_enabled: bool = Field(
         default=True,
         validation_alias=AliasChoices("CLAUDE_INSTRUCTIONS_ENABLED"),
