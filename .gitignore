@@ -26,9 +26,14 @@ storage/foldforge.db-*
 storage/uploads/*
 storage/processed/*
 storage/exports/*
+storage/cache/*
 !storage/uploads/.gitkeep
 !storage/processed/.gitkeep
 !storage/exports/.gitkeep
+!storage/cache/.gitkeep
+
+# Local API debug artifacts
+apps/api/tmp_*.pdf
 
 # Environment
 .env
