@@ -127,6 +127,17 @@ docker compose up --build
 
 Reset all data: `docker compose down -v`
 
+> **Security — required before any shared or internet-facing deploy**  
+> The Compose defaults are tuned for a **local demo**: `FOLDFORGE_API_KEY` is empty, so `/api/*` and `/storage/*` are **unauthenticated**. Anyone who can reach the host can upload models, trigger jobs, and read exports.  
+> Before exposing FoldForge beyond `localhost`, edit `.env` (see `.env.docker.example`) and set at minimum:
+>
+> ```env
+> FOLDFORGE_API_KEY=<strong-random-secret>
+> FOLDFORGE_REQUIRE_API_AUTH=true
+> ```
+>
+> Compose passes the same key to the web image as `NEXT_PUBLIC_FOLDFORGE_API_KEY` so Studio can call the API. `/health` and `/docs` stay public even when auth is enabled.
+
 For hot reload during development, use the native *Quick Start* above instead of Docker.
 
 Planned improvements (SSE job stream, interactive seam editor, texture baking) are evaluated in [`docs/future-features.md`](docs/future-features.md).
