@@ -63,6 +63,28 @@ class Settings(BaseSettings):
     meshy_poll_interval_sec: float = 3.0
     meshy_poll_timeout_sec: float = 600.0
 
+    # Claude AI — https://console.anthropic.com
+    anthropic_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ANTHROPIC_API_KEY", "FOLDFORGE_ANTHROPIC_API_KEY"),
+    )
+    claude_model: str = Field(
+        default="claude-sonnet-4-6",
+        validation_alias=AliasChoices("CLAUDE_MODEL", "FOLDFORGE_CLAUDE_MODEL"),
+    )
+    claude_instructions_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("CLAUDE_INSTRUCTIONS_ENABLED"),
+    )
+    claude_prompt_enhance_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("CLAUDE_PROMPT_ENHANCE_ENABLED"),
+    )
+    claude_seam_advisor_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("CLAUDE_SEAM_ADVISOR_ENABLED"),
+    )
+
     # Papercraft job worker identity and lease (multi-instance prep)
     process_worker_id: str | None = None
     process_job_lease_sec: int = 600

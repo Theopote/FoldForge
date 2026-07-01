@@ -12,6 +12,7 @@ from app.config import settings
 from app.schemas.job import JobStatus
 from app.schemas.model import ProjectStatus
 from app.schemas.stats import CraftabilityScore, ProcessStats
+from app.services.ai.post_pipeline import apply_claude_post_pipeline_enhancements
 from app.services.papercraft_pipeline import run_pipeline
 from app.services.seam_reflow_pipeline import run_seam_reflow_pipeline
 from app.services.pipeline_errors import JobCancelledError, LayoutFitError, UnfoldRepairError
@@ -193,6 +194,15 @@ class ProcessQueue:
                 pipeline_kwargs["source_original_path"] = source_path
 
             result = await asyncio.to_thread(pipeline, **pipeline_kwargs)
+
+            await apply_claude_post_pipeline_enhancements(
+                project_id=job.project_id,
+                project_name=job.project_name,
+                project_settings=job.settings,
+                result=result,
+                source_prompt=project.source_prompt,
+                on_progress=on_progress,
+            )
 
             stats = ProcessStats(
                 faces=result.face_count,

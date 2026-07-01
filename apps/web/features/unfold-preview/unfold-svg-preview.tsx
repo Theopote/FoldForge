@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { unfoldPreviewUrl } from "@/lib/unfold-preview-url";
@@ -325,6 +326,42 @@ export function UnfoldSvgPreview({
                     <li key={line}>{line}</li>
                   ))}
                 </ul>
+              </div>
+            ) : null}
+            {manifest?.advisor?.aiHints ? (
+              <div className="mt-3 space-y-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-primary">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI 语义建议
+                </div>
+                {manifest.advisor.aiHints.model_interpretation ? (
+                  <p className="text-xs text-muted-foreground">
+                    {manifest.advisor.aiHints.model_interpretation}
+                  </p>
+                ) : null}
+                {manifest.advisor.aiHints.suggestions?.map((suggestion, index) => (
+                  <div
+                    key={`${suggestion.action}-${suggestion.piece_labels.join("-")}-${index}`}
+                    className="border-l-2 border-primary/40 pl-2 text-xs"
+                  >
+                    <span
+                      className={
+                        suggestion.action === "split"
+                          ? "text-orange-600"
+                          : "text-blue-600"
+                      }
+                    >
+                      {suggestion.action === "split" ? "建议分割" : "建议合并"}
+                    </span>
+                    {" "}
+                    零件 {suggestion.piece_labels.join("、")}：{suggestion.reason}
+                  </div>
+                ))}
+                {manifest.advisor.aiHints.assembly_order_hint ? (
+                  <p className="border-t border-primary/10 pt-2 text-xs text-muted-foreground">
+                    组装建议：{manifest.advisor.aiHints.assembly_order_hint}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {manifest?.advisor?.overlapPieces.length ? (

@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 
 from app.schemas.job import JobStatus
-from app.schemas.model import ProjectStatus, SourceType, Style
+from app.schemas.model import Difficulty, ProjectStatus, SourceType, Style
 
 
 class GenerateFromTextRequest(BaseModel):
@@ -28,6 +28,24 @@ class GenerateModelResponse(BaseModel):
     job_status: JobStatus | None = Field(alias="jobStatus", default=None)
     progress: int = 0
     message: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class EnhancePromptRequest(BaseModel):
+    prompt: str = Field(min_length=2, max_length=300)
+    style: Style = Style.LOW_POLY
+    difficulty: Difficulty = Difficulty.STANDARD
+
+    model_config = {"populate_by_name": True}
+
+
+class EnhancePromptResponse(BaseModel):
+    enhanced_prompt: str = Field(alias="enhancedPrompt")
+    recommended_style: Style = Field(alias="recommendedStyle")
+    recommended_difficulty: Difficulty = Field(alias="recommendedDifficulty")
+    tip: str
+    available: bool
 
     model_config = {"populate_by_name": True}
 

@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { generateFromText } from "@/lib/api";
+import { generateFromText, enhancePrompt } from "@/lib/api";
 import { pollGenerationJob } from "@/lib/generation-job";
 import { beginJobPoll, cancelJobPoll } from "@/lib/job-poll-session";
 import {
@@ -33,6 +33,8 @@ export function TextToModelPanel() {
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<Style>("low_poly");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [enhanceTip, setEnhanceTip] = useState<string | null>(null);
   const { jobPhase, jobProgress, jobMessage, setGenerationResult, setAsyncGenerationPending, addLog, setError } =
     useStudioStore();
   const showAiProgress = isGenerating && jobPhase === "ai_generation";
@@ -52,6 +54,24 @@ export function TextToModelPanel() {
       });
     }
   }, [searchParams]);
+
+  const handleEnhance = async () => {
+    if (prompt.trim().length < 2) return;
+    setIsEnhancing(true);
+    setEnhanceTip(null);
+    try {
+      const result = await enhancePrompt({ prompt: prompt.trim(), style });
+      setPrompt(result.enhancedPrompt);
+      if (result.tip) setEnhanceTip(result.tip);
+      if (result.recommendedStyle !== style) {
+        setStyle(result.recommendedStyle as Style);
+      }
+    } catch {
+      // Keep the user's original prompt when enhancement fails.
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (prompt.trim().length < 3) {
@@ -151,6 +171,28 @@ export function TextToModelPanel() {
           rows={4}
           className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        {enhanceTip ? (
+          <p className="text-xs text-muted-foreground">{enhanceTip}</p>
+        ) : (
+          <span />
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-1.5 text-xs"
+          disabled={isEnhancing || prompt.trim().length < 2}
+          onClick={() => void handleEnhance()}
+        >
+          {isEnhancing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Sparkles className="h-3 w-3" />
+          )}
+          帮我优化
+        </Button>
       </div>
 
       <div className="space-y-2">

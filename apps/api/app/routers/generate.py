@@ -10,13 +10,20 @@ from fastapi.responses import JSONResponse
 from PIL import Image, UnidentifiedImageError
 
 from app.config import settings
-from app.schemas.generate import AiProviderInfo, GenerateFromTextRequest, GenerateModelResponse
+from app.schemas.generate import (
+    AiProviderInfo,
+    EnhancePromptRequest,
+    EnhancePromptResponse,
+    GenerateFromTextRequest,
+    GenerateModelResponse,
+)
 from app.schemas.generation_job import GenerationJob, GenerationJobResponse, JobType
 from app.schemas.job import JobStatus
-from app.schemas.model import ProjectStatus, SourceType, Style
+from app.schemas.model import Difficulty, ProjectStatus, SourceType, Style
 from app.services.ai.generation_queue import generation_queue
 from app.services.ai.job_response import build_generation_job_response
 from app.services.ai.job_store import generation_job_store
+from app.services.ai.prompt_builder import enhance_text_prompt
 from app.services.ai.rate_limit import enforce_ai_generation_rate_limit
 from app.services.ai.registry import get_model_provider, list_providers, should_use_async_queue
 from app.services.project_store import project_store
@@ -31,6 +38,61 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 async def get_ai_providers() -> list[AiProviderInfo]:
     """List available AI generation providers and which is active."""
     return [AiProviderInfo(**item) for item in list_providers()]
+
+
+@router.post("/ai/enhance-prompt", response_model=EnhancePromptResponse)
+async def enhance_prompt_endpoint(request: EnhancePromptRequest) -> EnhancePromptResponse:
+    """
+    Use Claude to refine a user's rough idea into an optimised Meshy prompt.
+    Returns a static fallback when Claude is not configured.
+    """
+    from app.config import settings as app_settings
+    from app.services.ai.claude_client import is_available
+
+    if not app_settings.claude_prompt_enhance_enabled or not is_available():
+        enhanced = enhance_text_prompt(request.prompt, request.style)
+        return EnhancePromptResponse(
+            enhancedPrompt=enhanced,
+            recommendedStyle=request.style,
+            recommendedDifficulty=request.difficulty,
+            tip="请先配置 ANTHROPIC_API_KEY 以启用 AI 优化",
+            available=False,
+        )
+
+    from app.services.ai.prompt_enhancer import enhance_prompt
+
+    try:
+        result = await enhance_prompt(
+            request.prompt,
+            request.style,
+            request.difficulty,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Prompt enhancement failed: {exc}") from exc
+
+    recommended_style = request.style
+    style_value = result.get("recommended_style")
+    if isinstance(style_value, str):
+        try:
+            recommended_style = Style(style_value)
+        except ValueError:
+            recommended_style = request.style
+
+    recommended_difficulty = request.difficulty
+    difficulty_value = result.get("recommended_difficulty")
+    if isinstance(difficulty_value, str):
+        try:
+            recommended_difficulty = Difficulty(difficulty_value)
+        except ValueError:
+            recommended_difficulty = request.difficulty
+
+    return EnhancePromptResponse(
+        enhancedPrompt=str(result.get("enhanced_prompt", request.prompt)),
+        recommendedStyle=recommended_style,
+        recommendedDifficulty=recommended_difficulty,
+        tip=str(result.get("tip", "")),
+        available=True,
+    )
 
 
 @router.get("/generation-jobs/{job_id}", response_model=GenerationJobResponse)

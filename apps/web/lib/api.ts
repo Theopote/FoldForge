@@ -384,6 +384,48 @@ export async function processModel(
   };
 }
 
+export async function enhancePrompt(payload: {
+  prompt: string;
+  style: string;
+  difficulty?: string;
+}): Promise<{
+  enhancedPrompt: string;
+  recommendedStyle: string;
+  recommendedDifficulty: string;
+  tip: string;
+  available: boolean;
+}> {
+  const response = await fetch("/api/ai/enhance-prompt", {
+    method: "POST",
+    headers: apiAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      prompt: payload.prompt,
+      style: payload.style,
+      difficulty: payload.difficulty ?? "standard",
+    }),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as {
+    enhancedPrompt?: string;
+    recommendedStyle?: string;
+    recommendedDifficulty?: string;
+    tip?: string;
+    available?: boolean;
+  } & ApiErrorBody;
+
+  if (!response.ok) {
+    throw new Error(parseApiError(body, "Prompt enhancement failed."));
+  }
+
+  return {
+    enhancedPrompt: body.enhancedPrompt ?? payload.prompt,
+    recommendedStyle: body.recommendedStyle ?? payload.style,
+    recommendedDifficulty: body.recommendedDifficulty ?? payload.difficulty ?? "standard",
+    tip: body.tip ?? "",
+    available: Boolean(body.available),
+  };
+}
+
 /**
  * Generate a 3D model from a text prompt (Phase 2).
  * Production providers may return 202 + jobId for async polling.

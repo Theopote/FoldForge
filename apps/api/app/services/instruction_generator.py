@@ -157,6 +157,73 @@ def build_instruction_document(
     )
 
 
+async def build_instruction_document_async(
+    project_name: str,
+    settings: ProjectSettings,
+    stats: dict[str, int | str],
+    warnings: list[str],
+    pieces: list[UnfoldPiece] | None = None,
+    pages: list[LayoutPage] | None = None,
+) -> InstructionDocument:
+    """Async version: attempts Claude-enhanced instructions, falls back to static."""
+    doc = build_instruction_document(
+        project_name,
+        settings,
+        stats,
+        warnings,
+        pieces=pieces,
+        pages=pages,
+    )
+
+    from app.config import settings as app_settings
+
+    if not app_settings.claude_instructions_enabled:
+        return doc
+
+    from app.services.ai.ai_instruction_writer import generate_ai_instructions
+
+    ai = await generate_ai_instructions(
+        project_name,
+        settings,
+        stats,
+        warnings,
+        pieces or [],
+        pages or [],
+    )
+    if ai is None:
+        return doc
+
+    return _apply_ai_instructions(doc, ai)
+
+
+def _apply_ai_instructions(
+    doc: InstructionDocument,
+    ai: dict,
+) -> InstructionDocument:
+    """Replace the two rule-based sections with Claude's output."""
+    new_sections: list[tuple[str, tuple[str, ...]]] = []
+
+    for title, body in doc.sections:
+        if title == "Assembly steps" and ai.get("assembly_steps_en"):
+            steps = [str(step) for step in ai["assembly_steps_en"]]
+            difficulty_note = ai.get("difficulty_note")
+            if difficulty_note:
+                steps.insert(0, f"📋 {difficulty_note}")
+            new_sections.append(("Assembly steps", tuple(steps)))
+        elif title == "中文提示" and ai.get("chinese_tips"):
+            new_sections.append(
+                ("中文提示", tuple(str(tip) for tip in ai["chinese_tips"]))
+            )
+        else:
+            new_sections.append((title, body))
+
+    return InstructionDocument(
+        title=doc.title,
+        generated=doc.generated,
+        sections=tuple(new_sections),
+    )
+
+
 def generate_instructions(
     project_name: str,
     settings: ProjectSettings,

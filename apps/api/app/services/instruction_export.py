@@ -8,7 +8,11 @@ from pathlib import Path
 from app.models.geometry import LayoutPage, UnfoldPiece
 from app.schemas.model import ProjectSettings
 from app.services.assembly_step_illustrator import export_assembly_steps_svg
-from app.services.instruction_generator import build_instruction_document, format_instruction_text
+from app.services.instruction_generator import (
+    build_instruction_document,
+    build_instruction_document_async,
+    format_instruction_text,
+)
 from app.services.instructions_pdf_exporter import render_instruction_pdf
 
 
@@ -73,3 +77,49 @@ def export_instruction_files(
         export_assembly_steps_svg(svg_path, pieces, settings, project_name)
 
     return txt_path, pdf_path, svg_path
+
+
+async def refresh_instruction_exports_async(
+    *,
+    project_id: str,
+    project_name: str,
+    project_settings: ProjectSettings,
+    stats: dict[str, int | str],
+    warnings: list[str],
+    pieces: list[UnfoldPiece] | None = None,
+    pages: list[LayoutPage] | None = None,
+    exports_dir: Path | None = None,
+) -> None:
+    """Rewrite instruction exports and patch the project ZIP when Claude is enabled."""
+    from app.config import settings as app_settings
+
+    target_exports_dir = exports_dir or app_settings.exports_dir
+    document = await build_instruction_document_async(
+        project_name,
+        project_settings,
+        stats,
+        warnings,
+        pieces=pieces,
+        pages=pages,
+    )
+    txt = format_instruction_text(document)
+    pdf_buffer = BytesIO()
+    render_instruction_pdf(
+        pdf_buffer,
+        document,
+        settings=project_settings,
+        pieces=pieces,
+        pages=pages,
+    )
+    pdf_bytes = pdf_buffer.getvalue()
+
+    txt_path = target_exports_dir / f"{project_id}.instructions.txt"
+    pdf_path = target_exports_dir / f"{project_id}.instructions.pdf"
+    txt_path.write_text(txt, encoding="utf-8")
+    pdf_path.write_bytes(pdf_bytes)
+
+    zip_path = target_exports_dir / f"{project_id}.zip"
+    if zip_path.exists():
+        from app.services.zip_exporter import patch_zip_instructions
+
+        patch_zip_instructions(zip_path, txt, pdf_bytes)

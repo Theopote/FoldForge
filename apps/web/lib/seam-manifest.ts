@@ -36,12 +36,26 @@ export type SeamSuggestion = {
   reason?: string;
 };
 
+export type SeamAiSuggestion = {
+  action: "split" | "merge";
+  piece_labels: string[];
+  reason: string;
+};
+
+export type SeamAiHints = {
+  model_interpretation?: string;
+  structural_notes?: string;
+  suggestions?: SeamAiSuggestion[];
+  assembly_order_hint?: string;
+};
+
 export type SeamAdvisor = {
   overlapPieces: string[];
   suggestions: SeamSuggestion[];
   edgeHints: Record<string, SeamEdgeHint>;
   faceHeat?: Record<string, number>;
   guidance?: string[];
+  aiHints?: SeamAiHints | null;
 };
 
 export type SeamManifest = {
@@ -81,6 +95,41 @@ function parsePosition3d(raw: unknown): SeamPosition3d | undefined {
   return {
     a: [Number(a[0]), Number(a[1]), Number(a[2])],
     b: [Number(b[0]), Number(b[1]), Number(b[2])],
+  };
+}
+
+function parseSeamAiHints(raw: unknown): SeamAiHints | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const value = raw as Record<string, unknown>;
+  const suggestions = Array.isArray(value.suggestions)
+    ? value.suggestions
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const suggestion = item as Record<string, unknown>;
+          const action = suggestion.action === "merge" ? "merge" : "split";
+          const pieceLabels = Array.isArray(suggestion.piece_labels)
+            ? suggestion.piece_labels.map(String)
+            : [];
+          const reason = suggestion.reason ? String(suggestion.reason) : "";
+          if (!reason) return null;
+          return { action, piece_labels: pieceLabels, reason } satisfies SeamAiSuggestion;
+        })
+        .filter((item): item is SeamAiSuggestion => item !== null)
+    : [];
+
+  return {
+    model_interpretation: value.model_interpretation
+      ? String(value.model_interpretation)
+      : undefined,
+    structural_notes: value.structural_notes
+      ? String(value.structural_notes)
+      : undefined,
+    suggestions,
+    assembly_order_hint: value.assembly_order_hint
+      ? String(value.assembly_order_hint)
+      : undefined,
   };
 }
 
@@ -178,6 +227,7 @@ export function parseSeamManifest(raw: unknown): SeamManifest | null {
       guidance: Array.isArray(rawAdvisor.guidance)
         ? rawAdvisor.guidance.map(String)
         : undefined,
+      aiHints: parseSeamAiHints(rawAdvisor.aiHints),
     };
   }
 

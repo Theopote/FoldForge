@@ -55,6 +55,24 @@ def export_zip(
     return output_path
 
 
+def patch_zip_instructions(
+    zip_path: Path,
+    instructions_txt: str,
+    instructions_pdf: bytes,
+) -> None:
+    """Replace instruction entries inside an existing export ZIP."""
+    tmp_path = zip_path.with_suffix(".zip.tmp")
+    with zipfile.ZipFile(zip_path, "r") as source:
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as target:
+            for item in source.infolist():
+                if item.filename in {"instructions.txt", "instructions.pdf"}:
+                    continue
+                target.writestr(item, source.read(item.filename))
+            target.writestr("instructions.txt", instructions_txt)
+            target.writestr("instructions.pdf", instructions_pdf)
+    tmp_path.replace(zip_path)
+
+
 def _build_readme(
     project_name: str,
     stats: dict[str, int | str],
